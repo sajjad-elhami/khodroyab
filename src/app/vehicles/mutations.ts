@@ -178,7 +178,7 @@ export async function createVehicleAction(
     return { ok: false as const, error: error?.message ?? "ثبت خودرو ناموفق بود." };
   }
 
-  return { ok: true as const, vehicleId: vehicle.id };
+  return { ok: true as const, vehicleId: vehicle.id, isAdmin: context.profile.role === "admin" };
 }
 
 export async function createVehicleBodyInspectionAction(
