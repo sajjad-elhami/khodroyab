@@ -10,9 +10,7 @@ export async function deleteVehicleImageAction(
   const { data: claimsData } = await supabase.auth.getClaims();
   const userId = claimsData?.claims?.sub;
 
-  if (!userId) {
-    return { ok: false as const, error: "کاربر وارد سیستم نشده است." };
-  }
+  if (!userId) return { ok: false as const, error: "کاربر وارد سیستم نشده است." };
 
   const { data: profile, error: profileError } = await supabase
     .from("profiles")
@@ -20,9 +18,7 @@ export async function deleteVehicleImageAction(
     .eq("id", userId)
     .single();
 
-  if (profileError || !profile) {
-    return { ok: false as const, error: "اطلاعات حساب کاربری دریافت نشد." };
-  }
+  if (profileError || !profile) return { ok: false as const, error: "اطلاعات حساب کاربری دریافت نشد." };
 
   const { data: vehicle, error: vehicleError } = await supabase
     .from("vehicles")
@@ -30,14 +26,9 @@ export async function deleteVehicleImageAction(
     .eq("id", vehicleId)
     .single();
 
-  if (vehicleError || !vehicle) {
-    return { ok: false as const, error: "خودرو پیدا نشد." };
-  }
+  if (vehicleError || !vehicle) return { ok: false as const, error: "خودرو پیدا نشد." };
 
-  const allowed =
-    profile.role === "admin" || profile.dealership_id === vehicle.dealership_id;
-
-  if (!allowed) {
+  if (profile.role !== "admin" && profile.dealership_id !== vehicle.dealership_id) {
     return { ok: false as const, error: "شما اجازه حذف تصویر این خودرو را ندارید." };
   }
 
@@ -48,22 +39,11 @@ export async function deleteVehicleImageAction(
     .eq("vehicle_id", vehicleId)
     .single();
 
-  if (imageError || !image) {
-    return { ok: false as const, error: "تصویر پیدا نشد." };
-  }
+  if (imageError || !image) return { ok: false as const, error: "تصویر پیدا نشد." };
 
-  const paths = [
-    image.storage_path,
-    ...(image.thumbnail_path ? [image.thumbnail_path] : []),
-  ];
-
-  const { error: storageError } = await supabase.storage
-    .from("vehicle-images")
-    .remove(paths);
-
-  if (storageError) {
-    return { ok: false as const, error: storageError.message };
-  }
+  const paths = [image.storage_path, ...(image.thumbnail_path ? [image.thumbnail_path] : [])];
+  const { error: storageError } = await supabase.storage.from("vehicle-images").remove(paths);
+  if (storageError) return { ok: false as const, error: storageError.message };
 
   const { error: deleteError } = await supabase
     .from("vehicle_images")
@@ -71,9 +51,6 @@ export async function deleteVehicleImageAction(
     .eq("id", imageId)
     .eq("vehicle_id", vehicleId);
 
-  if (deleteError) {
-    return { ok: false as const, error: deleteError.message };
-  }
-
+  if (deleteError) return { ok: false as const, error: deleteError.message };
   return { ok: true as const };
 }
