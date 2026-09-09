@@ -2,6 +2,7 @@
 
 import { useEffect, useMemo, useRef, useState } from "react";
 import { useRouter } from "next/navigation";
+import { updateVehicleStatusAction } from "../actions";
 import { createClient } from "@/lib/supabase/client";
 import AdminLayout from "@/components/admin/AdminLayout";
 
@@ -180,14 +181,14 @@ export default function DealershipInventoryClient({
     setUpdatingVehicleId(vehicle.id);
     setError("");
 
-    const { error: updateError } = await supabase
-      .from("vehicles")
-      .update({ status: nextStatus })
-      .eq("id", vehicle.id)
-      .eq("dealership_id", dealership.id);
+    const result = await updateVehicleStatusAction(
+      vehicle.id,
+      dealership.id,
+      nextStatus,
+    );
 
-    if (updateError) {
-      setError(updateError.message);
+    if (!result.ok) {
+      setError(result.error);
       setUpdatingVehicleId(null);
       return;
     }
