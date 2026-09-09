@@ -11,6 +11,13 @@ import VehicleBodyInspection, {
   type BodyPart,
   type Inspection,
 } from "@/components/vehicles/VehicleBodyInspection";
+import {
+  checkVehicleDuplicateAction,
+  createVehicleAction,
+  createVehicleBodyInspectionAction,
+  createVehicleImageRowsAction,
+  rollbackVehicleCreationAction,
+} from "../mutations";
 
 type DuplicateVehicle = {
   vehicle_id: string;
@@ -302,9 +309,6 @@ export default function NewVehicleClient({
     setCurrentStep((step) => Math.min(step + 1, 3));
   }
 
-
-
-
   useEffect(() => {
     if (!brandId) {
       setVehicleModels([]);
@@ -594,24 +598,21 @@ export default function NewVehicleClient({
 
     setDuplicateChecking(true);
 
-    const supabase = createClient();
+    const result = await checkVehicleDuplicateAction({
+      dealershipId,
+      brand: brand.trim(),
+      model: model.trim(),
+      trim: trim.trim() || null,
+      modelYear: modelYear ? Number(modelYear) : null,
+      mileage: mileage ? Number(mileage) : null,
+      color: color.trim() || null,
+      excludeVehicleId: null,
+    });
 
-    const { data, error } = await supabase.rpc(
-      "check_vehicle_duplicate",
-      {
-        p_dealership_id: dealershipId,
-        p_brand: brand.trim(),
-        p_model: model.trim(),
-        p_trim: trim.trim() || null,
-        p_model_year: modelYear ? Number(modelYear) : null,
-        p_mileage: mileage ? Number(mileage) : null,
-        p_color: color.trim() || null,
-        p_exclude_vehicle_id: null,
-      }
-    );
-
-    if (!error) {
-      setDuplicateVehicles((data ?? []) as DuplicateVehicle[]);
+    if (result.ok) {
+      setDuplicateVehicles(result.data as DuplicateVehicle[]);
+    } else {
+      setDuplicateVehicles([]);
     }
 
     setDuplicateChecking(false);
@@ -688,96 +689,52 @@ export default function NewVehicleClient({
     setSaving(true);
     setError("");
 
-    const supabase = createClient();
+    const vehicleResult = await createVehicleAction({
+      dealershipId,
+      brand,
+      model,
+      trim: trim.trim() || null,
+      modelYear: yearValue,
+      mileage: mileageValue,
+      color: color.trim() || null,
+      price: priceValue,
+      description,
+      status,
+      transmission: gearboxType || selectedTrim?.transmission || null,
+      fuelType: fuelType || selectedTrim?.fuel_type || null,
+      bodyCondition: bodyCondition || null,
+      chassisCondition: chassisCondition || null,
+      engineCondition: engineCondition || null,
+      insuranceExpiryDate: insuranceDeadline || null,
+      gearboxCondition: gearboxCondition || null,
+    });
 
-    const {
-      data: { session },
-      error: userError,
-    } = await supabase.auth.getSession();
-    const user = session?.user;
-
-    if (userError || !user) {
-      setError("کاربر وارد سیستم نشده است.");
+    if (!vehicleResult.ok) {
+      setError(vehicleResult.error);
       setSaving(false);
       return;
     }
 
-    const { data: profile, error: profileError } = await supabase
-      .from("profiles")
-      .select("dealership_id, role")
-      .eq("id", user.id)
-      .single();
-
-    if (profileError || !profile) {
-      setError("اطلاعات حساب کاربری دریافت نشد.");
-      setSaving(false);
-      return;
-    }
-
-    const isAdmin = profile.role === "admin";
-
-    if (!isAdmin && profile.dealership_id !== dealershipId) {
-      setError("شما اجازه ثبت خودرو برای این نمایشگاه را ندارید.");
-      setSaving(false);
-      return;
-    }
-
-    const { data: vehicle, error: vehicleError } =
-      await supabase
-        .from("vehicles")
-        .insert({
-          dealership_id: dealershipId,
-          brand: brand.trim(),
-          model: model.trim(),
-          trim: trim.trim() || null,
-          model_year: yearValue,
-          mileage: mileageValue,
-          color: color.trim() || null,
-          price: priceValue,
-          description: description.trim() || null,
-          status,
-          transmission: gearboxType || selectedTrim?.transmission || null,
-          fuel_type: fuelType || selectedTrim?.fuel_type || null,
-          body_condition: bodyCondition || null,
-          chassis_condition: chassisCondition || null,
-          engine_condition: engineCondition || null,
-          insurance_expiry_date: insuranceDeadline || null,
-          gearbox_condition: gearboxCondition || null,
-      })
-        .select("id")
-        .single();
-
-    if (vehicleError || !vehicle) {
-      setError(vehicleError?.message ?? "ثبت خودرو ناموفق بود.");
-      setSaving(false);
-      return;
-    }
+    const vehicleId = vehicleResult.vehicleId;
 
     /*
      * ذخیره کارشناسی بدنه
      */
     if (bodyInspection.length > 0) {
-      const inspectionRows = bodyInspection.map((item) => ({
-        vehicle_id: vehicle.id,
-        part_code: item.part_code,
-        condition: item.condition,
-        paint_thickness_microns:
-          item.paint_thickness_microns,
-        notes: item.notes,
-      }));
+      const inspectionResult = await createVehicleBodyInspectionAction(
+        vehicleId,
+        bodyInspection.map((item) => ({
+          partCode: item.part_code,
+          condition: item.condition,
+          paintThicknessMicrons: item.paint_thickness_microns,
+          notes: item.notes,
+        })),
+      );
 
-      const { error: inspectionError } = await supabase
-        .from("vehicle_body_inspections")
-        .insert(inspectionRows);
-
-      if (inspectionError) {
-        await supabase
-          .from("vehicles")
-          .delete()
-          .eq("id", vehicle.id);
-
+      if (!inspectionResult.ok) {
+        await rollbackVehicleCreationAction(vehicleId);
         setError(
-          `ذخیره کارشناسی بدنه ناموفق بود: ${inspectionError.message}`
+          `ذخیره کارشناسی بدنه ناموفق بود: ${inspectionResult.error}`
         );
         setSaving(false);
         return;
@@ -785,116 +742,105 @@ export default function NewVehicleClient({
     }
 
     /*
-     * آپلود تصاویر
+     * پردازش و آپلود تصاویر
+     *
+     * تصویر اصلی:
+     *   {vehicle_id}/gallery/{uuid}.webp
+     *
+     * thumbnail:
+     *   {vehicle_id}/gallery/thumb/{uuid}.webp
      */
-    /*
-   * پردازش و آپلود تصاویر
-   *
-   * تصویر اصلی:
-   *   {vehicle_id}/gallery/{uuid}.webp
-   *
-   * thumbnail:
-   *   {vehicle_id}/gallery/thumb/{uuid}.webp
-   */
-  const uploadedImagePaths: string[] = [];
+    const uploadedImagePaths: string[] = [];
+    const imageRows: {
+      storagePath: string;
+      thumbnailPath: string;
+      sortOrder: number;
+    }[] = [];
 
-  try {
-    for (let i = 0; i < images.length; i++) {
-      const sourceFile = images[i];
+    try {
+      for (let i = 0; i < images.length; i++) {
+        const sourceFile = images[i];
 
-      const processed = await processVehicleImage(sourceFile);
-      const fileId = crypto.randomUUID();
+        const processed = await processVehicleImage(sourceFile);
+        const fileId = crypto.randomUUID();
 
-      const storagePath =
-        `${vehicle.id}/gallery/${fileId}.webp`;
+        const storagePath =
+          `${vehicleId}/gallery/${fileId}.webp`;
 
-      const thumbnailPath =
-        `${vehicle.id}/gallery/thumb/${fileId}.webp`;
+        const thumbnailPath =
+          `${vehicleId}/gallery/thumb/${fileId}.webp`;
 
-      const { error: mainUploadError } = await supabase.storage
-        .from("vehicle-images")
-        .upload(storagePath, processed.mainFile, {
-          cacheControl: "31536000",
-          upsert: false,
-          contentType: "image/webp",
-        });
-
-      if (mainUploadError) {
-        throw new Error(
-          `آپلود تصویر "${sourceFile.name}" ناموفق بود: ${mainUploadError.message}`
-        );
-      }
-
-      uploadedImagePaths.push(storagePath);
-
-      const { error: thumbnailUploadError } =
-        await supabase.storage
+        const { error: mainUploadError } = await createClient().storage
           .from("vehicle-images")
-          .upload(thumbnailPath, processed.thumbnailFile, {
+          .upload(storagePath, processed.mainFile, {
             cacheControl: "31536000",
             upsert: false,
             contentType: "image/webp",
           });
 
-      if (thumbnailUploadError) {
-        throw new Error(
-          `آپلود thumbnail تصویر "${sourceFile.name}" ناموفق بود: ${thumbnailUploadError.message}`
-        );
-      }
+        if (mainUploadError) {
+          throw new Error(
+            `آپلود تصویر "${sourceFile.name}" ناموفق بود: ${mainUploadError.message}`
+          );
+        }
 
-      uploadedImagePaths.push(thumbnailPath);
+        uploadedImagePaths.push(storagePath);
 
-      const { error: imageRowError } = await supabase
-        .from("vehicle_images")
-        .insert({
-          vehicle_id: vehicle.id,
-          storage_path: storagePath,
-          thumbnail_path: thumbnailPath,
-          sort_order: i,
+        const { error: thumbnailUploadError } =
+          await createClient().storage
+            .from("vehicle-images")
+            .upload(thumbnailPath, processed.thumbnailFile, {
+              cacheControl: "31536000",
+              upsert: false,
+              contentType: "image/webp",
+            });
+
+        if (thumbnailUploadError) {
+          throw new Error(
+            `آپلود thumbnail تصویر "${sourceFile.name}" ناموفق بود: ${thumbnailUploadError.message}`
+          );
+        }
+
+        uploadedImagePaths.push(thumbnailPath);
+
+        imageRows.push({
+          storagePath,
+          thumbnailPath,
+          sortOrder: i,
         });
+      }
 
-      if (imageRowError) {
+      const imageRowsResult = await createVehicleImageRowsAction(
+        vehicleId,
+        imageRows,
+      );
+
+      if (!imageRowsResult.ok) {
         throw new Error(
-          `ثبت اطلاعات تصویر "${sourceFile.name}" ناموفق بود: ${imageRowError.message}`
+          `ثبت اطلاعات تصاویر ناموفق بود: ${imageRowsResult.error}`
         );
       }
+    } catch (imageError) {
+      // Storage uploads stay client-side; clean up any files uploaded so far.
+      if (uploadedImagePaths.length > 0) {
+        await createClient().storage
+          .from("vehicle-images")
+          .remove(uploadedImagePaths);
+      }
+
+      // DB rollback stays server-side and re-checks authorization.
+      await rollbackVehicleCreationAction(vehicleId);
+
+      setError(
+        imageError instanceof Error
+          ? imageError.message
+          : "پردازش یا آپلود تصویر ناموفق بود."
+      );
+      setSaving(false);
+      return;
     }
-  } catch (imageError) {
-    // 1) حذف فایل‌های Storage که تا این لحظه آپلود شده‌اند.
-    if (uploadedImagePaths.length > 0) {
-      await supabase.storage
-        .from("vehicle-images")
-        .remove(uploadedImagePaths);
-    }
 
-    // 2) حذف رکوردهای تصاویر ثبت‌شده برای این خودرو.
-    await supabase
-      .from("vehicle_images")
-      .delete()
-      .eq("vehicle_id", vehicle.id);
-
-    // 3) حذف کارشناسی بدنه ثبت‌شده برای این خودرو.
-    await supabase
-      .from("vehicle_body_inspections")
-      .delete()
-      .eq("vehicle_id", vehicle.id);
-
-    // 4) حذف خودروی نیمه‌ساخته.
-    await supabase
-      .from("vehicles")
-      .delete()
-      .eq("id", vehicle.id);
-
-    setError(
-      imageError instanceof Error
-        ? imageError.message
-        : "پردازش یا آپلود تصویر ناموفق بود."
-    );
-    setSaving(false);
-    return;
-  }
-
-    if (isAdmin && dealershipId) {
+    if (vehicleResult.isAdmin && dealershipId) {
       router.push(`/dealerships/${dealershipId}`);
     } else {
       router.push("/vehicles");
@@ -1137,8 +1083,6 @@ export default function NewVehicleClient({
                 onChange={handleImages}
               />
 
-
-
               {/* برند و مدل */}
               <button
                 type="button"
@@ -1172,9 +1116,6 @@ export default function NewVehicleClient({
                   </svg>
                 </span>
               </button>
-
-
-
                 </>
               )}
 
@@ -1216,8 +1157,6 @@ export default function NewVehicleClient({
                 </span>
               </button>
 
-
-
               {/* سوخت */}
               <button
                 type="button"
@@ -1251,8 +1190,6 @@ export default function NewVehicleClient({
                   </svg>
                 </span>
               </button>
-
-
 
               {/* سال */}
               <button
@@ -1292,8 +1229,6 @@ export default function NewVehicleClient({
                 </span>
               </button>
 
-
-
               {/* رنگ */}
               <button
                 type="button"
@@ -1327,8 +1262,6 @@ export default function NewVehicleClient({
                   </svg>
                 </span>
               </button>
-
-
 
               {/* قیمت */}
               <button
@@ -1367,10 +1300,6 @@ export default function NewVehicleClient({
                   </svg>
                 </span>
               </button>
-
-              
-
-
                 </>
               )}
 
@@ -1404,8 +1333,6 @@ export default function NewVehicleClient({
                 </span>
               </button>
 
-
-
               {/* شاسی */}
               <button
                 type="button"
@@ -1433,8 +1360,6 @@ export default function NewVehicleClient({
                   </svg>
                 </span>
               </button>
-
-
 
               <div className="my-4">
                 <VehicleBodyInspection
@@ -1472,8 +1397,6 @@ export default function NewVehicleClient({
                 </span>
               </button>
 
-
-
               {/* بیمه */}
               <button
                 type="button"
@@ -1502,8 +1425,6 @@ export default function NewVehicleClient({
                 </span>
               </button>
 
-
-
               {/* گیربکس */}
               <button
                 type="button"
@@ -1531,8 +1452,6 @@ export default function NewVehicleClient({
                   </svg>
                 </span>
               </button>
-
-
 
               {/* وضعیت گیربکس */}
               <button
@@ -1580,11 +1499,8 @@ export default function NewVehicleClient({
                   placeholder="توضیحات خودرو..."
                 />
               </section>
-
-
                 </>
               )}
-
             </div>
           </section>
 
@@ -1730,17 +1646,17 @@ export default function NewVehicleClient({
                               ? "کارکرد"
                               : pickerOpen === "price"
                                 ? "قیمت خودرو"
-                              : pickerOpen === "body"
-                                ? "وضعیت بدنه"
-                                : pickerOpen === "chassis"
-                                  ? "وضعیت شاسی"
-                                  : pickerOpen === "engine"
-                                    ? "وضعیت موتور"
-                                    : pickerOpen === "insurance"
-                                      ? "مهلت بیمه شخص ثالث"
-                                      : pickerOpen === "gearboxType"
-                                        ? "نوع گیربکس"
-                                        : "وضعیت گیربکس"}
+                                : pickerOpen === "body"
+                                  ? "وضعیت بدنه"
+                                  : pickerOpen === "chassis"
+                                    ? "وضعیت شاسی"
+                                    : pickerOpen === "engine"
+                                      ? "وضعیت موتور"
+                                      : pickerOpen === "insurance"
+                                        ? "مهلت بیمه شخص ثالث"
+                                        : pickerOpen === "gearboxType"
+                                          ? "نوع گیربکس"
+                                          : "وضعیت گیربکس"}
                   </h2>
 
                   <div className="w-9" />
@@ -2085,7 +2001,7 @@ export default function NewVehicleClient({
                     <p className="mt-3 text-center text-[14px] font-bold text-gray-600">
                       {Number(
                         price.replace(/[^0-9]/g, "") || 0
-                      ).toLocaleString("fa-IR")}{" "}
+                      ).toLocaleString("fa-IR")} {" "}
                       تومان
                     </p>
                   )}

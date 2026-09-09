@@ -6,7 +6,12 @@ import { createClient } from "@/lib/supabase/client";
 import { getCitiesByProvince } from "@/lib/data/catalog/clientCatalog";
 import AdminLayout from "@/components/admin/AdminLayout";
 import type { DealershipPageData } from "@/lib/data/dealerships/getDealershipPageData";
-import { getDealershipsByCityAction } from "./actions";
+import {
+  getDealershipsByCityAction,
+  createDealershipAction,
+  updateDealershipAction,
+  toggleDealershipAction,
+} from "./actions";
 
 type Province = {
   id: string;
@@ -274,25 +279,37 @@ export default function DealershipsClient({
     };
 
     if (editingDealership) {
-      const { error } = await supabase
-        .from("dealerships")
-        .update(payload)
-        .eq("id", editingDealership.id);
+      const result = await updateDealershipAction(
+        editingDealership.id,
+        {
+          name: form.name.trim(),
+          phone: form.phone.trim() || null,
+          address: form.address.trim() || null,
+          provinceId: form.provinceId,
+          cityId: form.cityId,
+          isActive: form.isActive,
+        }
+      );
 
-      if (error) {
-        setError(error.message);
+      if (!result.ok) {
+        setError(result.error);
         setSaving(false);
         return;
       }
 
       setSuccess("نمایشگاه با موفقیت ویرایش شد.");
     } else {
-      const { error } = await supabase
-        .from("dealerships")
-        .insert(payload);
+      const result = await createDealershipAction({
+        name: form.name.trim(),
+        phone: form.phone.trim() || null,
+        address: form.address.trim() || null,
+        provinceId: form.provinceId,
+        cityId: form.cityId,
+        isActive: form.isActive,
+      });
 
-      if (error) {
-        setError(error.message);
+      if (!result.ok) {
+        setError(result.error);
         setSaving(false);
         return;
       }
@@ -314,15 +331,13 @@ export default function DealershipsClient({
 
     const supabase = createClient();
 
-    const { error } = await supabase
-      .from("dealerships")
-      .update({
-        is_active: !dealership.is_active,
-      })
-      .eq("id", dealership.id);
+    const result = await toggleDealershipAction(
+      dealership.id,
+      !dealership.is_active
+    );
 
-    if (error) {
-      setError(error.message);
+    if (!result.ok) {
+      setError(result.error);
       return;
     }
 
