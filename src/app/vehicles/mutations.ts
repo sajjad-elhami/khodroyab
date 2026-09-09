@@ -209,6 +209,40 @@ export async function createVehicleBodyInspectionAction(
   return { ok: true };
 }
 
+export async function replaceVehicleBodyInspectionAction(
+  vehicleId: string,
+  inspections: VehicleBodyInspectionInput[],
+): Promise<VehicleMutationResult> {
+  const context = await getAuthorizedContext();
+  if (!context.ok) return { ok: false, error: context.error };
+
+  const access = await canAccessVehicle(context.supabase, context.profile, vehicleId);
+  if (!access.ok) return access;
+
+  const { error: deleteError } = await context.supabase
+    .from("vehicle_body_inspections")
+    .delete()
+    .eq("vehicle_id", vehicleId);
+
+  if (deleteError) return { ok: false, error: deleteError.message };
+  if (inspections.length === 0) return { ok: true };
+
+  const { error: insertError } = await context.supabase
+    .from("vehicle_body_inspections")
+    .insert(
+      inspections.map((item) => ({
+        vehicle_id: vehicleId,
+        part_code: item.partCode,
+        condition: item.condition,
+        paint_thickness_microns: item.paintThicknessMicrons,
+        notes: item.notes,
+      })),
+    );
+
+  if (insertError) return { ok: false, error: insertError.message };
+  return { ok: true };
+}
+
 export async function createVehicleImageRowsAction(
   vehicleId: string,
   images: VehicleImageInput[],
@@ -231,6 +265,50 @@ export async function createVehicleImageRowsAction(
         sort_order: item.sortOrder,
       })),
     );
+
+  if (error) return { ok: false, error: error.message };
+  return { ok: true };
+}
+
+export async function getVehicleImagePathsAction(vehicleId: string) {
+  const context = await getAuthorizedContext();
+  if (!context.ok) return { ok: false as const, error: context.error, paths: [] };
+
+  const access = await canAccessVehicle(context.supabase, context.profile, vehicleId);
+  if (!access.ok) return { ok: false as const, error: access.error, paths: [] };
+
+  const { data, error } = await context.supabase
+    .from("vehicle_images")
+    .select("storage_path, thumbnail_path")
+    .eq("vehicle_id", vehicleId);
+
+  if (error) return { ok: false as const, error: error.message, paths: [] };
+
+  const paths = Array.from(
+    new Set(
+      (data ?? []).flatMap((item) => [
+        item.storage_path,
+        ...(item.thumbnail_path ? [item.thumbnail_path] : []),
+      ]),
+    ),
+  );
+
+  return { ok: true as const, paths };
+}
+
+export async function deleteVehicleAction(
+  vehicleId: string,
+): Promise<VehicleMutationResult> {
+  const context = await getAuthorizedContext();
+  if (!context.ok) return { ok: false, error: context.error };
+
+  const access = await canAccessVehicle(context.supabase, context.profile, vehicleId);
+  if (!access.ok) return access;
+
+  const { error } = await context.supabase
+    .from("vehicles")
+    .delete()
+    .eq("id", vehicleId);
 
   if (error) return { ok: false, error: error.message };
   return { ok: true };
@@ -281,6 +359,50 @@ export async function updateVehicleAction(
   if (error) return { ok: false, error: error.message };
 
   return { ok: true };
+}
+
+export async function toggleVehicleFavoriteAction(
+  vehicleId: string,
+): Promise<{ ok: true; isFavorite: boolean } | { ok: false; error: string }> {
+  const context = await getAuthorizedContext();
+  if (!context.ok) return { ok: false, error: context.error };
+
+  const { data: vehicle, error: vehicleError } = await context.supabase
+    .from("vehicles")
+    .select("id")
+    .eq("id", vehicleId)
+    .single();
+
+  if (vehicleError || !vehicle) {
+    return { ok: false, error: "خودرو پیدا نشد." };
+  }
+
+  const { data: existing, error: existingError } = await context.supabase
+    .from("vehicle_favorites")
+    .select("user_id")
+    .eq("user_id", context.userId)
+    .eq("vehicle_id", vehicleId)
+    .maybeSingle();
+
+  if (existingError) return { ok: false, error: existingError.message };
+
+  if (existing) {
+    const { error } = await context.supabase
+      .from("vehicle_favorites")
+      .delete()
+      .eq("user_id", context.userId)
+      .eq("vehicle_id", vehicleId);
+
+    if (error) return { ok: false, error: error.message };
+    return { ok: true, isFavorite: false };
+  }
+
+  const { error } = await context.supabase
+    .from("vehicle_favorites")
+    .insert({ user_id: context.userId, vehicle_id: vehicleId });
+
+  if (error) return { ok: false, error: error.message };
+  return { ok: true, isFavorite: true };
 }
 
 export async function rollbackVehicleCreationAction(
