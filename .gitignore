@@ -59,34 +59,17 @@ review_*.txt
 next.config.ts.before-*
 proxy.ts.backup
 
-# Khodroyab local backups and generated artifacts
-.project-backups/
-*.zip
-*_backup.py
-*_report.txt
-*_analysis.txt
-*_comparison.txt
-*_preview.txt
-*_partial.json
-bama_catalog*.json
-bama_import*.json
-bama_brand_model_map.txt
-khodro45_catalog.json
-supabase_catalog.json
-khodroyab_architecture_audit_*.txt
-review_*.txt
-next.config.ts.before-*
-proxy.ts.backup
-
-# ===== Khodroyab temporary / backup files =====
+# Khodroyab temporary / backup files
 *.bak
 *.backup
+*.backup.*
 *.before-*
 *.before_*
 *.broken-backup*
 *.dashboard-final-before-polish
 *.ui-backup*
 *.snapshot
+*.safe-*
 
 # Supabase local CLI metadata
 /supabase/.temp/
