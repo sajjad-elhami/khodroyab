@@ -3,6 +3,7 @@
 import Link from "next/link";
 import { useEffect, useState } from "react";
 import { createClient } from "@/lib/supabase/client";
+import { toggleVehicleFavoriteAction } from "@/app/vehicles/mutations";
 import MobileAppShell from "@/components/mobile/MobileAppShell";
 import type { DashboardData } from "@/lib/data/dashboard/getDashboardData";
 
@@ -131,35 +132,20 @@ export default function Dashboard({
       return next;
     });
 
-    if (isFavorite) {
-      const { error } = await supabase
-        .from("vehicle_favorites")
-        .delete()
-        .eq("user_id", userId)
-        .eq("vehicle_id", vehicleId);
+    const result = await toggleVehicleFavoriteAction(vehicleId);
 
-      if (error) {
-        setFavoriteIds((current) => {
-          const next = new Set(current);
+    if (!result.ok) {
+      setFavoriteIds((current) => {
+        const next = new Set(current);
+
+        if (isFavorite) {
           next.add(vehicleId);
-          return next;
-        });
-      }
-    } else {
-      const { error } = await supabase
-        .from("vehicle_favorites")
-        .insert({
-          user_id: userId,
-          vehicle_id: vehicleId,
-        });
-
-      if (error) {
-        setFavoriteIds((current) => {
-          const next = new Set(current);
+        } else {
           next.delete(vehicleId);
-          return next;
-        });
-      }
+        }
+
+        return next;
+      });
     }
   };
 

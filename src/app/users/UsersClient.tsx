@@ -2,6 +2,7 @@
 
 import { useState } from "react";
 import { createClient } from "@/lib/supabase/client";
+import { updateUserProfileAction } from "./actions";
 import AdminLayout from "@/components/admin/AdminLayout";
 import type { UsersPageData } from "@/lib/data/users/types";
 
@@ -65,17 +66,15 @@ export default function UsersClient({
       return;
     }
 
-    const { error: updateError } = await supabase
-      .from("profiles")
-      .update({
-        dealership_id: dealershipId,
-        role,
-      })
-      .eq("id", profileId);
+    const result = await updateUserProfileAction(
+      profileId,
+      dealershipId,
+      role
+    );
 
-    if (updateError) {
+    if (!result.ok) {
       setError(
-        "ذخیره تغییرات انجام نشد: " + updateError.message
+        "ذخیره تغییرات انجام نشد: " + result.error
       );
       setSavingId(null);
       return;

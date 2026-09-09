@@ -9,6 +9,7 @@ import { useRouter } from "next/navigation";
 import type { VehiclesInitialPageData } from "@/lib/data/vehicles/getVehiclesInitialPageData";
 import type { VehiclesSearchPageData } from "@/lib/data/vehicles/getVehiclesSearchPageData";
 import { searchVehiclesAction } from "./actions";
+import { toggleVehicleFavoriteAction } from "./mutations";
 import MobileAppShell from "@/components/mobile/MobileAppShell";
 import {
   BODY_CODES,
@@ -1105,37 +1106,20 @@ export default function VehiclesClient({
       return next;
     });
 
-    if (wasFavorite) {
-      const { error: deleteError } =
-        await supabase
-          .from("vehicle_favorites")
-          .delete()
-          .eq("user_id", userId)
-          .eq("vehicle_id", vehicleId);
+    const result = await toggleVehicleFavoriteAction(vehicleId);
 
-      if (deleteError) {
-        setFavoriteIds((current) => {
-          const next = new Set(current);
+    if (!result.ok) {
+      setFavoriteIds((current) => {
+        const next = new Set(current);
+
+        if (wasFavorite) {
           next.add(vehicleId);
-          return next;
-        });
-      }
-    } else {
-      const { error: insertError } =
-        await supabase
-          .from("vehicle_favorites")
-          .insert({
-            user_id: userId,
-            vehicle_id: vehicleId,
-          });
-
-      if (insertError) {
-        setFavoriteIds((current) => {
-          const next = new Set(current);
+        } else {
           next.delete(vehicleId);
-          return next;
-        });
-      }
+        }
+
+        return next;
+      });
     }
   }
 

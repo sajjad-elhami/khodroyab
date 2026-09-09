@@ -10,7 +10,7 @@ import { processVehicleImage } from "@/lib/images/processVehicleImage";
 import VehicleBodyInspection, { type BodyPart, type Inspection } from "@/components/vehicles/VehicleBodyInspection";
 import type { VehicleEditPageData } from "@/lib/data/vehicles/getVehicleEditPageData";
 import VehicleCatalogSearch, { type VehicleCatalogSelection } from "@/components/admin/VehicleCatalogSearch";
-import { checkVehicleDuplicateAction, createVehicleImageRowsAction, replaceVehicleBodyInspectionAction } from "../mutations";
+import { checkVehicleDuplicateAction, createVehicleImageRowsAction, replaceVehicleBodyInspectionAction } from "../../mutations";
 import { updateEditableVehicleAction, deleteVehicleImageAction } from "./editActions";
 
 type DuplicateVehicle = {
