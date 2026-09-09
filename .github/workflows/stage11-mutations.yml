@@ -1,0 +1,113 @@
+name: Stage 11 Mutation Cleanup
+
+on:
+  push:
+    branches:
+      - architecture/mutation-server-actions
+
+permissions:
+  contents: write
+
+jobs:
+  migrate:
+    if: ${{ !startsWith(github.event.head_commit.message, 'stage11:') }}
+    runs-on: ubuntu-latest
+    steps:
+      - name: Checkout
+        uses: actions/checkout@v4
+
+      - name: Apply Stage 11 client mutation cleanup
+        shell: python
+        run: |
+          from pathlib import Path
+          import re
+
+          def edit(path, transform):
+              p = Path(path)
+              text = p.read_text(encoding="utf-8")
+              new = transform(text)
+              if new == text:
+                  raise SystemExit(f"No change made to {path}; aborting")
+              p.write_text(new, encoding="utf-8")
+              print(f"updated {path}")
+
+          def add_import(text, marker, statement):
+              if statement in text:
+                  return text
+              if marker not in text:
+                  raise SystemExit(f"Import marker not found: {marker}")
+              return text.replace(marker, marker + "\n" + statement, 1)
+
+          def dashboard(text):
+              text = add_import(
+                  text,
+                  'import { createClient } from "@/lib/supabase/client";',
+                  'import { toggleVehicleFavoriteAction } from "@/app/vehicles/mutations";',
+              )
+              pattern = r'  const toggleFavorite = async \(\n    event: React\.MouseEvent<HTMLButtonElement>,\n    vehicleId: string\n  \) => \{.*?\n  \};\n\n  return \('
+              replacement = '''  const toggleFavorite = async (\n    event: React.MouseEvent<HTMLButtonElement>,\n    vehicleId: string,\n  ) => {\n    event.preventDefault();\n    event.stopPropagation();\n\n    if (!userId) return;\n\n    const wasFavorite = favoriteIds.has(vehicleId);\n\n    setFavoriteIds((current) => {\n      const next = new Set(current);\n      if (wasFavorite) next.delete(vehicleId);\n      else next.add(vehicleId);\n      return next;\n    });\n\n    const result = await toggleVehicleFavoriteAction(vehicleId);\n\n    if (!result.ok) {\n      setFavoriteIds((current) => {\n        const next = new Set(current);\n        if (wasFavorite) next.add(vehicleId);\n        else next.delete(vehicleId);\n        return next;\n      });\n      setError(result.error);\n    }\n  };\n\n  return ('''
+              new, count = re.subn(pattern, replacement, text, count=1, flags=re.S)
+              if count != 1:
+                  raise SystemExit("Dashboard toggleFavorite block not found")
+              return new
+
+          def vehicles(text):
+              text = add_import(
+                  text,
+                  'import { searchVehiclesAction } from "./actions";',
+                  'import { toggleVehicleFavoriteAction } from "./mutations";',
+              )
+              pattern = r'  async function toggleFavorite\(\n    vehicleId: string\n  \) \{.*?\n  \}\n\n  function resetFilters\(\) \{'
+              replacement = '''  async function toggleFavorite(vehicleId: string) {\n    if (!userId) return;\n\n    const wasFavorite = favoriteIds.has(vehicleId);\n\n    setFavoriteIds((current) => {\n      const next = new Set(current);\n      if (wasFavorite) next.delete(vehicleId);\n      else next.add(vehicleId);\n      return next;\n    });\n\n    const result = await toggleVehicleFavoriteAction(vehicleId);\n\n    if (!result.ok) {\n      setFavoriteIds((current) => {\n        const next = new Set(current);\n        if (wasFavorite) next.add(vehicleId);\n        else next.delete(vehicleId);\n        return next;\n      });\n      setError(result.error);\n    }\n  }\n\n  function resetFilters() {'''
+              new, count = re.subn(pattern, replacement, text, count=1, flags=re.S)
+              if count != 1:
+                  raise SystemExit("Vehicles toggleFavorite block not found")
+              return new
+
+          def users(text):
+              text = add_import(
+                  text,
+                  'import { createClient } from "@/lib/supabase/client";',
+                  'import { updateUserProfileAction } from "./actions";',
+              )
+              pattern = r'  async function updateProfile\(\n    profileId: string,\n    dealershipId: string \| null,\n    role: "admin" \| "dealership_user"\n  \) \{.*?\n  \}\n\n  if \(loading\) \{'
+              replacement = '''  async function updateProfile(\n    profileId: string,\n    dealershipId: string | null,\n    role: "admin" | "dealership_user",\n  ) {\n    setSavingId(profileId);\n    setError("");\n    setSuccess("");\n\n    const result = await updateUserProfileAction(profileId, dealershipId, role);\n\n    if (!result.ok) {\n      setError("ذخیره تغییرات انجام نشد: " + result.error);\n      setSavingId(null);\n      return;\n    }\n\n    setProfiles((current) =>\n      current.map((profile) =>\n        profile.id === profileId\n          ? { ...profile, dealership_id: dealershipId, role }\n          : profile,\n      ),\n    );\n\n    setSuccess("تغییرات کاربر با موفقیت ذخیره شد.");\n    setSavingId(null);\n  }\n\n  if (loading) {'''
+              new, count = re.subn(pattern, replacement, text, count=1, flags=re.S)
+              if count != 1:
+                  raise SystemExit("Users updateProfile block not found")
+              return new
+
+          def dealerships(text):
+              text = add_import(
+                  text,
+                  'import { getDealershipsByCityAction } from "./actions";',
+                  'import { createDealershipAction, toggleDealershipAction, updateDealershipAction } from "./actions";',
+              )
+              pattern = r'  async function handleSave\(event: React\.FormEvent<HTMLFormElement>\) \{.*?\n  \}\n\n  async function toggleDealership'
+              replacement = '''  async function handleSave(event: React.FormEvent<HTMLFormElement>) {\n    event.preventDefault();\n    setError("");\n    setSuccess("");\n\n    if (!form.name.trim()) { setError("نام نمایشگاه را وارد کنید."); return; }\n    if (!form.provinceId) { setError("استان را انتخاب کنید."); return; }\n    if (!form.cityId) { setError("شهر را انتخاب کنید."); return; }\n\n    setSaving(true);\n\n    const input = {\n      name: form.name,\n      phone: form.phone,\n      address: form.address,\n      provinceId: form.provinceId,\n      cityId: form.cityId,\n      isActive: form.isActive,\n    };\n\n    const result = editingDealership\n      ? await updateDealershipAction(editingDealership.id, input)\n      : await createDealershipAction(input);\n\n    if (!result.ok) {\n      setError(result.error);\n      setSaving(false);\n      return;\n    }\n\n    setSuccess(editingDealership ? "نمایشگاه با موفقیت ویرایش شد." : "نمایشگاه با موفقیت ثبت شد.");\n    setSaving(false);\n    closeForm();\n    if (cityId) await loadDealerships(cityId);\n  }\n\n  async function toggleDealership'''
+              new, count = re.subn(pattern, replacement, text, count=1, flags=re.S)
+              if count != 1:
+                  raise SystemExit("Dealership handleSave block not found")
+              pattern2 = r'  async function toggleDealership\(dealership: Dealership\) \{.*?\n  \}\n\n  if \(loading\) \{'
+              replacement2 = '''  async function toggleDealership(dealership: Dealership) {\n    setError("");\n    setSuccess("");\n\n    const result = await toggleDealershipAction(dealership.id, !dealership.is_active);\n\n    if (!result.ok) {\n      setError(result.error);\n      return;\n    }\n\n    setSuccess(dealership.is_active ? "نمایشگاه غیرفعال شد." : "نمایشگاه فعال شد.");\n    if (cityId) await loadDealerships(cityId);\n  }\n\n  if (loading) {'''
+              new, count = re.subn(pattern2, replacement2, new, count=1, flags=re.S)
+              if count != 1:
+                  raise SystemExit("Dealership toggleDealership block not found")
+              return new
+
+          edit("src/app/dashboard/DashboardClient.tsx", dashboard)
+          edit("src/app/vehicles/VehiclesClient.tsx", vehicles)
+          edit("src/app/users/UsersClient.tsx", users)
+          edit("src/app/dealerships/DealershipsClient.tsx", dealerships)
+
+      - name: Verify no direct client DB mutations remain in Stage 11 files
+        run: |
+          ! grep -nE '\.(insert|update|delete)\(' src/app/dashboard/DashboardClient.tsx src/app/vehicles/VehiclesClient.tsx src/app/users/UsersClient.tsx src/app/dealerships/DealershipsClient.tsx
+
+      - name: Commit Stage 11 changes
+        run: |
+          git config user.name "github-actions[bot]"
+          git config user.email "41898282+github-actions[bot]@users.noreply.github.com"
+          git add src/app/dashboard/DashboardClient.tsx src/app/vehicles/VehiclesClient.tsx src/app/users/UsersClient.tsx src/app/dealerships/DealershipsClient.tsx
+          git commit -m "stage11: complete client mutation boundary cleanup"
+          git push
