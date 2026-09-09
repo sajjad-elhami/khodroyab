@@ -19,7 +19,6 @@ export async function updateEditableVehicleAction(input: {
   const supabase = await createClient();
   const { data: claimsData } = await supabase.auth.getClaims();
   const userId = claimsData?.claims?.sub;
-
   if (!userId) return { ok: false as const, error: "کاربر وارد سیستم نشده است." };
 
   const { data: profile, error: profileError } = await supabase
@@ -27,7 +26,6 @@ export async function updateEditableVehicleAction(input: {
     .select("dealership_id, role")
     .eq("id", userId)
     .single();
-
   if (profileError || !profile) return { ok: false as const, error: "اطلاعات حساب کاربری دریافت نشد." };
 
   const { data: vehicle, error: vehicleError } = await supabase
@@ -35,7 +33,6 @@ export async function updateEditableVehicleAction(input: {
     .select("dealership_id")
     .eq("id", input.vehicleId)
     .single();
-
   if (vehicleError || !vehicle) return { ok: false as const, error: "خودرو پیدا نشد." };
 
   if (profile.role !== "admin" && profile.dealership_id !== vehicle.dealership_id) {
@@ -63,3 +60,5 @@ export async function updateEditableVehicleAction(input: {
   if (error) return { ok: false as const, error: error.message };
   return { ok: true as const };
 }
+
+export { deleteVehicleImageAction } from "./imageMutations";
