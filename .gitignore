@@ -39,3 +39,77 @@ yarn-error.log*
 # typescript
 *.tsbuildinfo
 next-env.d.ts
+
+# Khodroyab local backups and generated artifacts
+.project-backups/
+*.zip
+*_backup.py
+*_report.txt
+*_analysis.txt
+*_comparison.txt
+*_preview.txt
+*_partial.json
+bama_catalog*.json
+bama_import*.json
+bama_brand_model_map.txt
+khodro45_catalog.json
+supabase_catalog.json
+khodroyab_architecture_audit_*.txt
+review_*.txt
+next.config.ts.before-*
+proxy.ts.backup
+
+# Khodroyab local backups and generated artifacts
+.project-backups/
+*.zip
+*_backup.py
+*_report.txt
+*_analysis.txt
+*_comparison.txt
+*_preview.txt
+*_partial.json
+bama_catalog*.json
+bama_import*.json
+bama_brand_model_map.txt
+khodro45_catalog.json
+supabase_catalog.json
+khodroyab_architecture_audit_*.txt
+review_*.txt
+next.config.ts.before-*
+proxy.ts.backup
+
+# ===== Khodroyab temporary / backup files =====
+*.bak
+*.backup
+*.before-*
+*.before_*
+*.broken-backup*
+*.dashboard-final-before-polish
+*.ui-backup*
+*.snapshot
+
+# Supabase local CLI metadata
+/supabase/.temp/
+
+# Generated research / crawler / import artifacts
+KHODROYAB_ARCHITECTURE_AUDIT.sh
+khodroyab_architecture_audit_*.txt
+bama_*.py
+bama_*.txt
+bama_*.json
+compare_bama_supabase*.py
+compare_bama_supabase*.txt
+import_bama*.py
+khodro45_crawler.py
+khodro45_catalog.json
+khodroyab_public_data.sql
+supabase_catalog.json
+review_*.txt
+
+# Vehicle inspection debug/design experiments
+/public/vehicle-inspection/*debug*
+/public/vehicle-inspection/*inspector*
+/public/vehicle-inspection/closed-paths*
+/public/vehicle-inspection/click-test.html
+/public/vehicle-inspection/designs/
+/public/vehicle-inspection/svg-geometry-debug.svg

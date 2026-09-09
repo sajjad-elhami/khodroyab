@@ -1,0 +1,2288 @@
+"use client";
+
+import { normalizeDigits } from "@/lib/utils/numberInput";
+import type { NewVehiclePageData } from "@/lib/data/vehicles/getVehicleNewPageData";
+import { useEffect, useMemo, useRef, useState } from "react";
+import { createClient } from "@/lib/supabase/client";
+import { getVehicleModelsByBrand, getVehicleTrimsByModel } from "@/lib/data/catalog/clientCatalog";
+import { processVehicleImage } from "@/lib/images/processVehicleImage";
+import { useRouter } from "next/navigation";
+import VehicleBodyInspection, {
+  type BodyPart,
+  type Inspection,
+} from "@/components/vehicles/VehicleBodyInspection";
+
+type DuplicateVehicle = {
+  vehicle_id: string;
+  brand: string;
+  model: string;
+  trim_name: string | null;
+  model_year: number | null;
+  mileage: number | null;
+  color: string | null;
+  price: number | null;
+  status: string;
+  created_at: string;
+  similarity_score: number;
+  match_level: "strong" | "possible" | "weak";
+};
+
+type DealershipOption = {
+  id: string;
+  name: string;
+  is_active: boolean;
+};
+
+type VehicleBrand = {
+  id: string;
+  name_fa: string;
+  name_en: string | null;
+  slug: string;
+};
+
+type VehicleModel = {
+  id: string;
+  brand_id: string;
+  name_fa: string;
+  name_en: string | null;
+  slug: string;
+  vehicle_class: string | null;
+  body_type: string | null;
+};
+
+type VehicleTrim = {
+  id: string;
+  model_id: string;
+  name_fa: string;
+  name_en: string | null;
+  slug: string;
+  model_year_from: number | null;
+  model_year_to: number | null;
+  engine: string | null;
+  transmission: string | null;
+  fuel_type: string | null;
+  drivetrain: string | null;
+};
+
+type Props = {
+  initialData: NewVehiclePageData;
+};
+
+export default function NewVehicleClient({
+  initialData,
+}: Props) {
+  const router = useRouter();
+
+  const dealerships = initialData.dealerships;
+
+  const [dealershipId, setDealershipId] = useState(
+    initialData.initialDealershipId ?? ""
+  );
+
+  const [brand, setBrand] = useState("");
+  const [model, setModel] = useState("");
+  const [trim, setTrim] = useState("");
+  const [modelYear, setModelYear] = useState("");
+
+  const [brandId, setBrandId] = useState("");
+  const [modelId, setModelId] = useState("");
+
+  const [vehicleBrands, setVehicleBrands] = useState<VehicleBrand[]>(initialData.brands as VehicleBrand[]);
+  const [vehicleModels, setVehicleModels] = useState<VehicleModel[]>([]);
+  const [vehicleTrims, setVehicleTrims] = useState<VehicleTrim[]>([]);
+
+  const selectedTrim = vehicleTrims.find(
+    (item) => item.name_fa === trim
+  );
+  const [catalogLoading, setCatalogLoading] = useState(false);
+  const [modelsLoading, setModelsLoading] = useState(false);
+  const [trimsLoading, setTrimsLoading] = useState(false);
+  const [mileage, setMileage] = useState("");
+  const [color, setColor] = useState("");
+  const [price, setPrice] = useState("");
+  const [description, setDescription] = useState("");
+  const [status, setStatus] = useState("available");
+
+  const [bodyParts, setBodyParts] = useState<BodyPart[]>(initialData.bodyParts as BodyPart[]);
+  const [bodyInspection, setBodyInspection] = useState<Inspection[]>([]);
+  const [bodyCondition, setBodyCondition] = useState("");
+  const [chassisCondition, setChassisCondition] = useState("");
+  const [inspectionLoading, setInspectionLoading] = useState(false);
+
+  const [images, setImages] = useState<File[]>([]);
+  const [imageSheetOpen, setImageSheetOpen] = useState(false);
+  const cameraInputRef = useRef<HTMLInputElement>(null);
+  const galleryInputRef = useRef<HTMLInputElement>(null);
+
+  const [fuelType, setFuelType] = useState("");
+  const [engineCondition, setEngineCondition] = useState("");
+  const [insuranceDeadline, setInsuranceDeadline] = useState("");
+  const [insuranceMonths, setInsuranceMonths] = useState<number | null>(null);
+  const [gearboxType, setGearboxType] = useState("");
+  const [gearboxCondition, setGearboxCondition] = useState("");
+
+  const [pickerOpen, setPickerOpen] = useState<
+    | "vehicle"
+    | "year"
+    | "fuel"
+    | "color"
+    | "price"
+    | "mileage"
+    | "body"
+    | "chassis"
+    | "engine"
+    | "insurance"
+    | "gearboxType"
+    | "gearboxCondition"
+    | null
+  >(null);
+
+  const [pickerSearch, setPickerSearch] = useState("");
+
+  const imagePreviews = useMemo(
+    () =>
+      images.map((file, index) => ({
+        file,
+        index,
+        url: URL.createObjectURL(file),
+      })),
+    [images]
+  );
+
+  useEffect(() => {
+    return () => {
+      imagePreviews.forEach(({ url }) => URL.revokeObjectURL(url));
+    };
+  }, [imagePreviews]);
+  const [saving, setSaving] = useState(false);
+  const [error, setError] = useState("");
+  const [duplicateVehicles, setDuplicateVehicles] =
+    useState<DuplicateVehicle[]>([]);
+  const [duplicateChecking, setDuplicateChecking] = useState(false);
+
+  // ثبت خودرو — جریان سه‌مرحله‌ای
+  const [currentStep, setCurrentStep] = useState(1);
+
+  function clearVehicleForm() {
+    setBrand("");
+    setModel("");
+    setTrim("");
+    setModelYear("");
+    setBrandId("");
+    setModelId("");
+    setVehicleTrims([]);
+    setMileage("");
+    setColor("");
+    setPrice("");
+    setDescription("");
+    setStatus("available");
+    setImages([]);
+    setImageSheetOpen(false);
+    setFuelType("");
+    setEngineCondition("");
+    setInsuranceDeadline("");
+    setInsuranceMonths(null);
+    setGearboxType("");
+    setGearboxCondition("");
+    setBodyCondition("");
+    setChassisCondition("");
+    setBodyInspection([]);
+    setImages([]);
+    setError("");
+    setCurrentStep(1);
+  }
+
+  function validateStep(step: number) {
+    if (step === 1) {
+      if (images.length === 0) {
+        return "حداقل یک عکس برای آگهی اضافه کنید.";
+      }
+
+      if (!brand.trim() || !model.trim()) {
+        return "برند و مدل خودرو الزامی است.";
+      }
+
+      if (vehicleTrims.length > 0 && !trim.trim()) {
+        return "تیپ خودرو را انتخاب کنید.";
+      }
+
+      return "";
+    }
+
+    if (step === 2) {
+      if (!mileage.trim()) {
+        return "کارکرد خودرو الزامی است.";
+      }
+
+      if (!fuelType.trim()) {
+        return "نوع سوخت خودرو را انتخاب کنید.";
+      }
+
+      if (!modelYear.trim()) {
+        return "مدل (سال تولید) الزامی است.";
+      }
+
+      if (!color.trim()) {
+        return "رنگ خودرو را انتخاب کنید.";
+      }
+
+      if (!price.trim()) {
+        return "قیمت خودرو الزامی است.";
+      }
+
+      const yearValue = Number(modelYear);
+      const mileageValue = Number(mileage);
+      const priceValue = Number(price);
+
+      if (
+        !Number.isInteger(yearValue) ||
+        yearValue < 1300 ||
+        yearValue > 1405
+      ) {
+        return "سال مدل باید بین ۱۳۰۰ تا ۱۴۰۵ باشد.";
+      }
+
+      if (
+        !Number.isInteger(mileageValue) ||
+        mileageValue < 0
+      ) {
+        return "کارکرد باید یک عدد صحیح بزرگ‌تر یا مساوی صفر باشد.";
+      }
+
+      if (
+        !Number.isInteger(priceValue) ||
+        priceValue < 0
+      ) {
+        return "قیمت باید یک عدد صحیح بزرگ‌تر یا مساوی صفر باشد.";
+      }
+
+      return "";
+    }
+
+    if (step === 3) {
+      if (!bodyCondition.trim()) {
+        return "وضعیت بدنه را انتخاب کنید.";
+      }
+
+      if (!chassisCondition.trim()) {
+        return "وضعیت شاسی را انتخاب کنید.";
+      }
+
+      if (!engineCondition.trim()) {
+        return "وضعیت موتور را انتخاب کنید.";
+      }
+
+      if (!insuranceDeadline.trim()) {
+        return "مهلت بیمه شخص ثالث را انتخاب کنید.";
+      }
+
+      if (!gearboxType.trim()) {
+        return "نوع گیربکس را انتخاب کنید.";
+      }
+
+      if (!gearboxCondition.trim()) {
+        return "وضعیت گیربکس را انتخاب کنید.";
+      }
+
+      return "";
+    }
+
+    return "";
+  }
+
+  function goNextStep() {
+    const validationError = validateStep(currentStep);
+
+    if (validationError) {
+      setError(validationError);
+      return;
+    }
+
+    setError("");
+    setCurrentStep((step) => Math.min(step + 1, 3));
+  }
+
+
+
+
+  useEffect(() => {
+    if (!brandId) {
+      setVehicleModels([]);
+      setVehicleTrims([]);
+      setModelId("");
+      setModel("");
+      setTrim("");
+      return;
+    }
+
+    loadVehicleModels(brandId);
+  }, [brandId]);
+
+  async function loadVehicleModels(selectedBrandId: string) {
+    setModelsLoading(true);
+
+    const supabase = createClient();
+
+    try {
+      const models = await getVehicleModelsByBrand(
+        supabase,
+        selectedBrandId,
+      );
+
+      setVehicleModels(models as VehicleModel[]);
+    } catch (error) {
+      setError(
+        `دریافت مدل‌های برند ناموفق بود: ${
+          error instanceof Error ? error.message : "خطای نامشخص"
+        }`,
+      );
+      setVehicleModels([]);
+    } finally {
+      setModelsLoading(false);
+    }
+  }
+
+  useEffect(() => {
+    if (!modelId) {
+      setVehicleTrims([]);
+      setTrim("");
+      return;
+    }
+
+    loadVehicleTrims(modelId);
+  }, [modelId]);
+
+  async function loadVehicleTrims(selectedModelId: string) {
+    setTrimsLoading(true);
+
+    const supabase = createClient();
+
+    try {
+      const trims = await getVehicleTrimsByModel(
+        supabase,
+        selectedModelId,
+      );
+
+      setVehicleTrims(trims as VehicleTrim[]);
+    } catch (error) {
+      setError(
+        `دریافت تیپ‌های مدل ناموفق بود: ${
+          error instanceof Error ? error.message : "خطای نامشخص"
+        }`,
+      );
+      setVehicleTrims([]);
+    } finally {
+      setTrimsLoading(false);
+    }
+  }
+
+  function handleBrandChange(value: string) {
+    const selected = vehicleBrands.find((item) => item.id === value);
+
+    setBrandId(value);
+    setBrand(selected?.name_fa ?? "");
+
+    setModelId("");
+    setModel("");
+    setTrim("");
+    setVehicleModels([]);
+    setVehicleTrims([]);
+  }
+
+  function handleModelChange(value: string) {
+    const selected = vehicleModels.find((item) => item.id === value);
+
+    setModelId(value);
+    setModel(selected?.name_fa ?? "");
+    setTrim("");
+    setVehicleTrims([]);
+  }
+
+  function handleTrimChange(value: string) {
+    setTrim(value);
+  }
+
+  async function handleImages(
+    e: React.ChangeEvent<HTMLInputElement>
+  ) {
+    const selectedFiles = Array.from(e.target.files ?? []);
+
+    if (selectedFiles.length === 0) {
+      e.target.value = "";
+      return;
+    }
+
+    const remainingSlots = 10 - images.length;
+
+    if (remainingSlots <= 0) {
+      setError("حداکثر ۱۰ تصویر برای هر خودرو مجاز است.");
+      e.target.value = "";
+      return;
+    }
+
+    const filesToAdd = selectedFiles.slice(0, remainingSlots);
+
+    if (selectedFiles.length > remainingSlots) {
+      setError(
+        `حداکثر ۱۰ تصویر برای هر خودرو مجاز است. فقط ${remainingSlots} تصویر اول اضافه می‌شود.`
+      );
+    } else {
+      setError("");
+    }
+
+    const invalidType = filesToAdd.find(
+      (file) => !file.type.startsWith("image/")
+    );
+
+    if (invalidType) {
+      setError("فقط فایل‌های تصویری قابل انتخاب هستند.");
+      e.target.value = "";
+      return;
+    }
+
+    const oversized = filesToAdd.find(
+      (file) => file.size > 10 * 1024 * 1024
+    );
+
+    if (oversized) {
+      setError(
+        `حجم فایل "${oversized.name}" بیشتر از ۱۰ مگابایت است.`
+      );
+      e.target.value = "";
+      return;
+    }
+
+    setImages((current) => [...current, ...filesToAdd]);
+
+    e.target.value = "";
+    setImageSheetOpen(false);
+    setCurrentStep(1);
+  }
+
+  function removeImage(index: number) {
+    setImages((current) => current.filter((_, i) => i !== index));
+  }
+
+  function formatInsuranceDate(value: string) {
+    if (!value) {
+      return "انتخاب";
+    }
+
+    const date = new Date(`${value}T00:00:00`);
+
+    if (Number.isNaN(date.getTime())) {
+      return "انتخاب";
+    }
+
+    return new Intl.DateTimeFormat("fa-IR", {
+      year: "numeric",
+      month: "2-digit",
+      day: "2-digit",
+    }).format(date);
+  }
+
+  function openPicker(
+    picker:
+      | "vehicle"
+      | "year"
+      | "fuel"
+      | "color"
+      | "price"
+      | "mileage"
+      | "body"
+      | "chassis"
+      | "engine"
+      | "insurance"
+      | "gearboxType"
+      | "gearboxCondition"
+  ) {
+    setPickerSearch("");
+    setPickerOpen(picker);
+  }
+
+  function selectVehicle(modelItem: VehicleModel) {
+    setModelId(modelItem.id);
+    setModel(modelItem.name_fa);
+    setTrim("");
+    setVehicleTrims([]);
+    setPickerSearch("");
+  }
+
+  function selectTrim(item: VehicleTrim) {
+    setTrim(item.name_fa);
+
+    if (item.fuel_type) {
+      setFuelType(item.fuel_type);
+    }
+
+    if (item.transmission) {
+      setGearboxType(item.transmission);
+    }
+
+    setPickerOpen(null);
+    setPickerSearch("");
+  }
+
+  function selectBrandAndOpenModel(brandItem: VehicleBrand) {
+    setBrandId(brandItem.id);
+    setBrand(brandItem.name_fa);
+    setModelId("");
+    setModel("");
+    setTrim("");
+    setVehicleModels([]);
+    setVehicleTrims([]);
+    loadVehicleModels(brandItem.id);
+  }
+
+  function selectFuel(value: string) {
+    setFuelType(value);
+    setPickerOpen(null);
+  }
+
+  function selectColor(value: string) {
+    setColor(value);
+    setPickerOpen(null);
+  }
+
+  function selectBody(value: string) {
+    setPickerOpen(null);
+    setBodyInspection((current) => [
+      ...current,
+      {
+        part_code: "overall_body",
+        condition: value,
+        paint_thickness_microns: null,
+        notes: null,
+      },
+    ]);
+  }
+
+  function clearRegistrationForm() {
+    setDealershipId(initialData.initialDealershipId ?? "");
+    setBrand("");
+    setModel("");
+    setTrim("");
+    setModelYear("");
+    setBrandId("");
+    setModelId("");
+    setVehicleModels([]);
+    setVehicleTrims([]);
+    setMileage("");
+    setColor("");
+    setPrice("");
+    setDescription("");
+    setStatus("available");
+    setBodyInspection([]);
+    setImages([]);
+    setFuelType("");
+    setEngineCondition("");
+    setInsuranceDeadline("");
+    setGearboxType("");
+    setGearboxCondition("");
+    setPickerOpen(null);
+    setPickerSearch("");
+    setDuplicateVehicles([]);
+    setError("");
+    setImageSheetOpen(false);
+  }
+
+  async function checkVehicleDuplicates() {
+    if (!dealershipId || !brand.trim() || !model.trim()) {
+      setDuplicateVehicles([]);
+      return;
+    }
+
+    setDuplicateChecking(true);
+
+    const supabase = createClient();
+
+    const { data, error } = await supabase.rpc(
+      "check_vehicle_duplicate",
+      {
+        p_dealership_id: dealershipId,
+        p_brand: brand.trim(),
+        p_model: model.trim(),
+        p_trim: trim.trim() || null,
+        p_model_year: modelYear ? Number(modelYear) : null,
+        p_mileage: mileage ? Number(mileage) : null,
+        p_color: color.trim() || null,
+        p_exclude_vehicle_id: null,
+      }
+    );
+
+    if (!error) {
+      setDuplicateVehicles((data ?? []) as DuplicateVehicle[]);
+    }
+
+    setDuplicateChecking(false);
+  }
+
+  useEffect(() => {
+    const timer = window.setTimeout(() => {
+      checkVehicleDuplicates();
+    }, 600);
+
+    return () => window.clearTimeout(timer);
+  }, [
+    dealershipId,
+    brand,
+    model,
+    trim,
+    modelYear,
+    mileage,
+    color,
+  ]);
+
+  async function createVehicle(e: React.FormEvent) {
+    e.preventDefault();
+
+    if (!dealershipId) {
+      setError("نمایشگاه را انتخاب کنید.");
+      return;
+    }
+
+    const finalValidationError = validateStep(1) || validateStep(2) || validateStep(3);
+
+    if (finalValidationError) {
+      setError(finalValidationError);
+      return;
+    }
+
+    if (status !== "available" && status !== "sold") {
+      setError("وضعیت خودرو نامعتبر است.");
+      return;
+    }
+
+    const yearValue = modelYear.trim() ? Number(modelYear) : null;
+    const mileageValue = mileage.trim() ? Number(mileage) : null;
+    const priceValue = price.trim() ? Number(price) : null;
+
+    if (
+      yearValue === null ||
+      !Number.isInteger(yearValue) ||
+      yearValue < 1300 ||
+      yearValue > 1405
+    ) {
+      setError("سال مدل باید بین ۱۳۰۰ تا ۱۴۰۵ باشد.");
+      return;
+    }
+
+    if (
+      mileageValue === null ||
+      !Number.isInteger(mileageValue) ||
+      mileageValue < 0
+    ) {
+      setError("کارکرد باید یک عدد صحیح بزرگ‌تر یا مساوی صفر باشد.");
+      return;
+    }
+
+    if (
+      priceValue === null ||
+      !Number.isInteger(priceValue) ||
+      priceValue < 0
+    ) {
+      setError("قیمت باید یک عدد صحیح بزرگ‌تر یا مساوی صفر باشد.");
+      return;
+    }
+
+    setSaving(true);
+    setError("");
+
+    const supabase = createClient();
+
+    const {
+      data: { session },
+      error: userError,
+    } = await supabase.auth.getSession();
+    const user = session?.user;
+
+    if (userError || !user) {
+      setError("کاربر وارد سیستم نشده است.");
+      setSaving(false);
+      return;
+    }
+
+    const { data: profile, error: profileError } = await supabase
+      .from("profiles")
+      .select("dealership_id, role")
+      .eq("id", user.id)
+      .single();
+
+    if (profileError || !profile) {
+      setError("اطلاعات حساب کاربری دریافت نشد.");
+      setSaving(false);
+      return;
+    }
+
+    const isAdmin = profile.role === "admin";
+
+    if (!isAdmin && profile.dealership_id !== dealershipId) {
+      setError("شما اجازه ثبت خودرو برای این نمایشگاه را ندارید.");
+      setSaving(false);
+      return;
+    }
+
+    const { data: vehicle, error: vehicleError } =
+      await supabase
+        .from("vehicles")
+        .insert({
+          dealership_id: dealershipId,
+          brand: brand.trim(),
+          model: model.trim(),
+          trim: trim.trim() || null,
+          model_year: yearValue,
+          mileage: mileageValue,
+          color: color.trim() || null,
+          price: priceValue,
+          description: description.trim() || null,
+          status,
+          transmission: gearboxType || selectedTrim?.transmission || null,
+          fuel_type: fuelType || selectedTrim?.fuel_type || null,
+          body_condition: bodyCondition || null,
+          chassis_condition: chassisCondition || null,
+          engine_condition: engineCondition || null,
+          insurance_expiry_date: insuranceDeadline || null,
+          gearbox_condition: gearboxCondition || null,
+      })
+        .select("id")
+        .single();
+
+    if (vehicleError || !vehicle) {
+      setError(vehicleError?.message ?? "ثبت خودرو ناموفق بود.");
+      setSaving(false);
+      return;
+    }
+
+    /*
+     * ذخیره کارشناسی بدنه
+     */
+    if (bodyInspection.length > 0) {
+      const inspectionRows = bodyInspection.map((item) => ({
+        vehicle_id: vehicle.id,
+        part_code: item.part_code,
+        condition: item.condition,
+        paint_thickness_microns:
+          item.paint_thickness_microns,
+        notes: item.notes,
+      }));
+
+      const { error: inspectionError } = await supabase
+        .from("vehicle_body_inspections")
+        .insert(inspectionRows);
+
+      if (inspectionError) {
+        await supabase
+          .from("vehicles")
+          .delete()
+          .eq("id", vehicle.id);
+
+        setError(
+          `ذخیره کارشناسی بدنه ناموفق بود: ${inspectionError.message}`
+        );
+        setSaving(false);
+        return;
+      }
+    }
+
+    /*
+     * آپلود تصاویر
+     */
+    /*
+   * پردازش و آپلود تصاویر
+   *
+   * تصویر اصلی:
+   *   {vehicle_id}/gallery/{uuid}.webp
+   *
+   * thumbnail:
+   *   {vehicle_id}/gallery/thumb/{uuid}.webp
+   */
+  const uploadedImagePaths: string[] = [];
+
+  try {
+    for (let i = 0; i < images.length; i++) {
+      const sourceFile = images[i];
+
+      const processed = await processVehicleImage(sourceFile);
+      const fileId = crypto.randomUUID();
+
+      const storagePath =
+        `${vehicle.id}/gallery/${fileId}.webp`;
+
+      const thumbnailPath =
+        `${vehicle.id}/gallery/thumb/${fileId}.webp`;
+
+      const { error: mainUploadError } = await supabase.storage
+        .from("vehicle-images")
+        .upload(storagePath, processed.mainFile, {
+          cacheControl: "31536000",
+          upsert: false,
+          contentType: "image/webp",
+        });
+
+      if (mainUploadError) {
+        throw new Error(
+          `آپلود تصویر "${sourceFile.name}" ناموفق بود: ${mainUploadError.message}`
+        );
+      }
+
+      uploadedImagePaths.push(storagePath);
+
+      const { error: thumbnailUploadError } =
+        await supabase.storage
+          .from("vehicle-images")
+          .upload(thumbnailPath, processed.thumbnailFile, {
+            cacheControl: "31536000",
+            upsert: false,
+            contentType: "image/webp",
+          });
+
+      if (thumbnailUploadError) {
+        throw new Error(
+          `آپلود thumbnail تصویر "${sourceFile.name}" ناموفق بود: ${thumbnailUploadError.message}`
+        );
+      }
+
+      uploadedImagePaths.push(thumbnailPath);
+
+      const { error: imageRowError } = await supabase
+        .from("vehicle_images")
+        .insert({
+          vehicle_id: vehicle.id,
+          storage_path: storagePath,
+          thumbnail_path: thumbnailPath,
+          sort_order: i,
+        });
+
+      if (imageRowError) {
+        throw new Error(
+          `ثبت اطلاعات تصویر "${sourceFile.name}" ناموفق بود: ${imageRowError.message}`
+        );
+      }
+    }
+  } catch (imageError) {
+    // 1) حذف فایل‌های Storage که تا این لحظه آپلود شده‌اند.
+    if (uploadedImagePaths.length > 0) {
+      await supabase.storage
+        .from("vehicle-images")
+        .remove(uploadedImagePaths);
+    }
+
+    // 2) حذف رکوردهای تصاویر ثبت‌شده برای این خودرو.
+    await supabase
+      .from("vehicle_images")
+      .delete()
+      .eq("vehicle_id", vehicle.id);
+
+    // 3) حذف کارشناسی بدنه ثبت‌شده برای این خودرو.
+    await supabase
+      .from("vehicle_body_inspections")
+      .delete()
+      .eq("vehicle_id", vehicle.id);
+
+    // 4) حذف خودروی نیمه‌ساخته.
+    await supabase
+      .from("vehicles")
+      .delete()
+      .eq("id", vehicle.id);
+
+    setError(
+      imageError instanceof Error
+        ? imageError.message
+        : "پردازش یا آپلود تصویر ناموفق بود."
+    );
+    setSaving(false);
+    return;
+  }
+
+    if (isAdmin && dealershipId) {
+      router.push(`/dealerships/${dealershipId}`);
+    } else {
+      router.push("/vehicles");
+    }
+  }
+
+  return (
+    <main
+      dir="rtl"
+      className="min-h-screen bg-gray-100 text-gray-900"
+    >
+      <header className="border-b border-gray-100 bg-white">
+        <div className="mx-auto max-w-5xl px-4 pb-0 pt-4 sm:px-6">
+          <div className="relative flex h-11 items-center justify-center">
+            <button
+              type="button"
+              onClick={clearRegistrationForm}
+              className="absolute left-0 rounded-lg px-2 py-1.5 text-[13px] font-semibold text-gray-500 transition hover:bg-gray-50 hover:text-gray-900"
+            >
+              پاک کردن
+            </button>
+
+            <h1 className="text-[18px] font-extrabold text-gray-950">
+              ثبت خودرو
+            </h1>
+
+            <button
+              type="button"
+              aria-label="بازگشت به صفحه اصلی"
+              onClick={() => router.push("/")}
+              className="absolute right-0 flex h-9 w-9 items-center justify-center rounded-full text-gray-700 transition hover:bg-gray-50"
+            >
+              <svg
+                viewBox="0 0 24 24"
+                fill="none"
+                className="h-5 w-5"
+                aria-hidden="true"
+              >
+                <path
+                  d="M9 5l7 7-7 7"
+                  stroke="currentColor"
+                  strokeWidth="1.8"
+                  strokeLinecap="round"
+                  strokeLinejoin="round"
+                />
+              </svg>
+            </button>
+          </div>
+
+          <div className="mt-2 flex w-full gap-1.5" aria-label="مراحل ثبت خودرو">
+      {[1, 2, 3].map((step) => (
+        <span
+          key={step}
+          className={`h-1.5 flex-1 rounded-full ${
+            currentStep >= step ? "bg-emerald-500" : "bg-gray-200"
+          }`}
+        />
+      ))}
+    </div>
+        </div>
+      </header>
+
+      <div className="mx-auto max-w-5xl px-4 py-6 sm:px-6 sm:py-8">
+        <div className="mb-6 text-center">
+          <p className="text-[12px] font-medium text-gray-500">
+            {`صفحه ${currentStep} از ۳`}
+          </p>
+          <h2 className="mt-1 text-[17px] font-bold text-gray-900">
+              {currentStep === 1
+              ? "تصاویر و توضیحات"
+              : currentStep === 2
+                ? "مشخصات خودرو"
+                : "تکمیل آگهی"}
+            </h2>
+        </div>
+
+        {error && (
+          <div className="mb-6 rounded-xl bg-red-50 p-4 text-sm text-red-700">
+            {error}
+          </div>
+        )}
+
+        <form
+          onSubmit={(e) => {
+            e.preventDefault();
+
+            if (currentStep < 3) {
+              goNextStep();
+              return;
+            }
+
+            const validationError = validateStep(3);
+
+            if (validationError) {
+              setError(validationError);
+              return;
+            }
+
+            createVehicle(e);
+          }}
+          className="space-y-6"
+        >
+          {duplicateChecking && (
+            <div className="rounded-2xl border border-slate-200 bg-slate-50 p-4 text-sm text-slate-600">
+              در حال بررسی خودروهای مشابه...
+            </div>
+          )}
+
+          {!duplicateChecking && duplicateVehicles.length > 0 && (
+            <div className="rounded-2xl border border-amber-200 bg-amber-50 p-4">
+              <div className="font-extrabold text-amber-950">
+                خودروی مشابه پیدا شد
+              </div>
+
+              <div className="mt-3 space-y-2">
+                {duplicateVehicles.map((vehicle) => (
+                  <div
+                    key={vehicle.vehicle_id}
+                    className="rounded-xl border border-amber-200 bg-white p-3"
+                  >
+                    <div className="font-bold text-slate-900">
+                      {vehicle.brand} {vehicle.model}
+                      {vehicle.trim_name ? ` · ${vehicle.trim_name}` : ""}
+                    </div>
+
+                    <div className="mt-1 text-xs text-slate-500">
+                      {vehicle.model_year != null
+                        ? `سال ${vehicle.model_year.toLocaleString("fa-IR", { useGrouping: false })}`
+                        : ""}
+                      {vehicle.mileage != null
+                        ? ` · ${vehicle.mileage.toLocaleString("fa-IR")} کیلومتر`
+                        : ""}
+                    </div>
+                  </div>
+                ))}
+              </div>
+            </div>
+          )}
+
+          <section className="overflow-hidden rounded-2xl bg-white shadow-sm ring-1 ring-gray-100">
+            <div className="divide-y divide-gray-100">
+
+              {currentStep === 1 && (
+                <>
+              {/* تصاویر */}
+              <div className="px-4 py-5">
+                <div className="mb-4 flex items-center justify-between">
+                  <span className="text-[14px] font-bold text-gray-900">
+                    عکس آگهی <span className="text-red-500">*</span>
+                  </span>
+
+                  <span className="text-[11px] text-gray-400">
+                    حداقل یک عکس
+                  </span>
+                </div>
+
+                <div className="flex items-start gap-2 overflow-x-auto pb-1">
+                  <button
+                    type="button"
+                    onClick={() => setImageSheetOpen(true)}
+                    className="flex h-20 w-20 shrink-0 flex-col items-center justify-center rounded-xl border border-dashed border-gray-300 bg-gray-50 text-gray-600 active:scale-[0.98]"
+                  >
+                    <svg
+                      viewBox="0 0 24 24"
+                      fill="none"
+                      className="h-6 w-6"
+                      aria-hidden="true"
+                    >
+                      <path
+                        d="M5 8.5A2.5 2.5 0 017.5 6h1.7l1.1-1.5h3.4L14.8 6h1.7A2.5 2.5 0 0119 8.5v8A2.5 2.5 0 0116.5 19h-9A2.5 2.5 0 015 16.5v-8Z"
+                        stroke="currentColor"
+                        strokeWidth="1.5"
+                        strokeLinejoin="round"
+                      />
+                      <circle
+                        cx="12"
+                        cy="12.5"
+                        r="3"
+                        stroke="currentColor"
+                        strokeWidth="1.5"
+                      />
+                    </svg>
+
+                    <span className="mt-1 text-[10px] font-semibold">
+                      افزودن عکس
+                    </span>
+                  </button>
+
+                  {imagePreviews.map(({ file, index, url }) => (
+                    <div
+                      key={`${file.name}-${file.lastModified}-${index}`}
+                      className="relative h-20 w-20 shrink-0 overflow-hidden rounded-xl bg-gray-100"
+                    >
+                      <img
+                        src={url}
+                        alt={`عکس ${index + 1}`}
+                        className="h-full w-full object-cover"
+                      />
+
+                      <button
+                        type="button"
+                        aria-label={`حذف عکس ${index + 1}`}
+                        onClick={() => removeImage(index)}
+                        className="absolute right-1 top-1 flex h-6 w-6 items-center justify-center rounded-full bg-black/60 text-white"
+                      >
+                        <svg
+                          viewBox="0 0 24 24"
+                          fill="none"
+                          className="h-3.5 w-3.5"
+                          aria-hidden="true"
+                        >
+                          <path
+                            d="M6 6l12 12M18 6L6 18"
+                            stroke="currentColor"
+                            strokeWidth="1.8"
+                            strokeLinecap="round"
+                          />
+                        </svg>
+                      </button>
+                    </div>
+                  ))}
+                </div>
+              </div>
+
+              <input
+                ref={cameraInputRef}
+                type="file"
+                accept="image/*"
+                capture="environment"
+                className="hidden"
+                onChange={handleImages}
+              />
+
+              <input
+                ref={galleryInputRef}
+                type="file"
+                accept="image/*"
+                multiple
+                className="hidden"
+                onChange={handleImages}
+              />
+
+
+
+              {/* برند و مدل */}
+              <button
+                type="button"
+                onClick={() => openPicker("vehicle")}
+                className="flex min-h-[64px] w-full items-center justify-between px-4 text-right active:bg-gray-50"
+              >
+                <span className="text-[14px] font-semibold text-gray-700">
+                  برند و مدل <span className="text-red-500">*</span>
+                </span>
+
+                <span
+                  className={`flex items-center gap-2 text-[14px] font-bold ${
+                    brand && model ? "text-red-600" : "text-gray-400"
+                  }`}
+                >
+                  {brand && model ? `${brand} ${model}` : "انتخاب"}
+
+                  <svg
+                    viewBox="0 0 24 24"
+                    fill="none"
+                    className="h-4 w-4"
+                    aria-hidden="true"
+                  >
+                    <path
+                      d="M9 5l7 7-7 7"
+                      stroke="currentColor"
+                      strokeWidth="1.7"
+                      strokeLinecap="round"
+                      strokeLinejoin="round"
+                    />
+                  </svg>
+                </span>
+              </button>
+
+
+
+                </>
+              )}
+
+              {currentStep === 2 && (
+                <>
+              {/* کارکرد */}
+              <button
+                type="button"
+                onClick={() => openPicker("mileage")}
+                className="flex min-h-[64px] w-full items-center justify-between px-4 text-right active:bg-gray-50"
+              >
+                <span className="text-[14px] font-semibold text-gray-700">
+                  کارکرد (کیلومتر) <span className="text-red-500">*</span>
+                </span>
+
+                <span
+                  className={`flex items-center gap-2 text-[14px] font-bold ${
+                    mileage ? "text-red-600" : "text-gray-400"
+                  }`}
+                >
+                  {mileage
+                    ? `${Number(mileage).toLocaleString("fa-IR")} کیلومتر`
+                    : "انتخاب"}
+
+                  <svg
+                    viewBox="0 0 24 24"
+                    fill="none"
+                    className="h-4 w-4"
+                    aria-hidden="true"
+                  >
+                    <path
+                      d="M9 5l7 7-7 7"
+                      stroke="currentColor"
+                      strokeWidth="1.7"
+                      strokeLinecap="round"
+                      strokeLinejoin="round"
+                    />
+                  </svg>
+                </span>
+              </button>
+
+
+
+              {/* سوخت */}
+              <button
+                type="button"
+                onClick={() => openPicker("fuel")}
+                className="flex min-h-[64px] w-full items-center justify-between px-4 text-right active:bg-gray-50"
+              >
+                <span className="text-[14px] font-semibold text-gray-700">
+                  نوع سوخت <span className="text-red-500">*</span>
+                </span>
+
+                <span
+                  className={`flex items-center gap-2 text-[14px] font-bold ${
+                    fuelType ? "text-red-600" : "text-gray-400"
+                  }`}
+                >
+                  {fuelType || "انتخاب"}
+
+                  <svg
+                    viewBox="0 0 24 24"
+                    fill="none"
+                    className="h-4 w-4"
+                    aria-hidden="true"
+                  >
+                    <path
+                      d="M9 5l7 7-7 7"
+                      stroke="currentColor"
+                      strokeWidth="1.7"
+                      strokeLinecap="round"
+                      strokeLinejoin="round"
+                    />
+                  </svg>
+                </span>
+              </button>
+
+
+
+              {/* سال */}
+              <button
+                type="button"
+                onClick={() => openPicker("year")}
+                className="flex min-h-[64px] w-full items-center justify-between px-4 text-right active:bg-gray-50"
+              >
+                <span className="text-[14px] font-semibold text-gray-700">
+                  مدل (سال تولید) <span className="text-red-500">*</span>
+                </span>
+
+                <span
+                  className={`flex items-center gap-2 text-[14px] font-bold ${
+                    modelYear ? "text-red-600" : "text-gray-400"
+                  }`}
+                >
+                  {modelYear
+                    ? Number(modelYear).toLocaleString("fa-IR", {
+                        useGrouping: false,
+                      })
+                    : "انتخاب"}
+
+                  <svg
+                    viewBox="0 0 24 24"
+                    fill="none"
+                    className="h-4 w-4"
+                    aria-hidden="true"
+                  >
+                    <path
+                      d="M9 5l7 7-7 7"
+                      stroke="currentColor"
+                      strokeWidth="1.7"
+                      strokeLinecap="round"
+                      strokeLinejoin="round"
+                    />
+                  </svg>
+                </span>
+              </button>
+
+
+
+              {/* رنگ */}
+              <button
+                type="button"
+                onClick={() => openPicker("color")}
+                className="flex min-h-[64px] w-full items-center justify-between px-4 text-right active:bg-gray-50"
+              >
+                <span className="text-[14px] font-semibold text-gray-700">
+                  رنگ <span className="text-red-500">*</span>
+                </span>
+
+                <span
+                  className={`flex items-center gap-2 text-[14px] font-bold ${
+                    color ? "text-red-600" : "text-gray-400"
+                  }`}
+                >
+                  {color || "انتخاب"}
+
+                  <svg
+                    viewBox="0 0 24 24"
+                    fill="none"
+                    className="h-4 w-4"
+                    aria-hidden="true"
+                  >
+                    <path
+                      d="M9 5l7 7-7 7"
+                      stroke="currentColor"
+                      strokeWidth="1.7"
+                      strokeLinecap="round"
+                      strokeLinejoin="round"
+                    />
+                  </svg>
+                </span>
+              </button>
+
+
+
+              {/* قیمت */}
+              <button
+                type="button"
+                onClick={() => openPicker("price")}
+                className="flex min-h-[64px] w-full items-center justify-between px-4 text-right active:bg-gray-50"
+              >
+                <span className="text-[14px] font-semibold text-gray-700">
+                  قیمت خودرو (تومان) <span className="text-red-500">*</span>
+                </span>
+
+                <span
+                  className={`flex items-center gap-2 text-[14px] font-bold ${
+                    price ? "text-red-600" : "text-gray-400"
+                  }`}
+                >
+                  {price
+                    ? `${Number(
+                        price.replace(/[^0-9]/g, "") || 0
+                      ).toLocaleString("fa-IR")} تومان`
+                    : "انتخاب"}
+
+                  <svg
+                    viewBox="0 0 24 24"
+                    fill="none"
+                    className="h-4 w-4"
+                    aria-hidden="true"
+                  >
+                    <path
+                      d="M9 5l7 7-7 7"
+                      stroke="currentColor"
+                      strokeWidth="1.7"
+                      strokeLinecap="round"
+                      strokeLinejoin="round"
+                    />
+                  </svg>
+                </span>
+              </button>
+
+              
+
+
+                </>
+              )}
+
+              {currentStep === 3 && (
+                <>
+              {/* بدنه */}
+              <button
+                type="button"
+                onClick={() => openPicker("body")}
+                className="flex min-h-[64px] w-full items-center justify-between px-4 text-right active:bg-gray-50"
+              >
+                <span className="text-[14px] font-semibold text-gray-700">
+                  وضعیت بدنه <span className="text-red-500">*</span>
+                </span>
+
+                <span
+                  className={`flex items-center gap-2 text-[14px] font-bold ${
+                    bodyCondition ? "text-red-600" : "text-gray-400"
+                  }`}
+                >
+                  {bodyCondition || "انتخاب"}
+                  <svg viewBox="0 0 24 24" fill="none" className="h-4 w-4">
+                    <path
+                      d="M9 5l7 7-7 7"
+                      stroke="currentColor"
+                      strokeWidth="1.7"
+                      strokeLinecap="round"
+                      strokeLinejoin="round"
+                    />
+                  </svg>
+                </span>
+              </button>
+
+
+
+              {/* شاسی */}
+              <button
+                type="button"
+                onClick={() => openPicker("chassis")}
+                className="flex min-h-[64px] w-full items-center justify-between px-4 text-right active:bg-gray-50"
+              >
+                <span className="text-[14px] font-semibold text-gray-700">
+                  وضعیت شاسی <span className="text-red-500">*</span>
+                </span>
+
+                <span
+                  className={`flex items-center gap-2 text-[14px] font-bold ${
+                    chassisCondition ? "text-red-600" : "text-gray-400"
+                  }`}
+                >
+                  {chassisCondition || "انتخاب"}
+                  <svg viewBox="0 0 24 24" fill="none" className="h-4 w-4">
+                    <path
+                      d="M9 5l7 7-7 7"
+                      stroke="currentColor"
+                      strokeWidth="1.7"
+                      strokeLinecap="round"
+                      strokeLinejoin="round"
+                    />
+                  </svg>
+                </span>
+              </button>
+
+
+
+              <div className="my-4">
+                <VehicleBodyInspection
+                  parts={bodyParts}
+                  value={bodyInspection}
+                  onChange={setBodyInspection}
+                />
+              </div>
+
+              {/* موتور */}
+              <button
+                type="button"
+                onClick={() => openPicker("engine")}
+                className="flex min-h-[64px] w-full items-center justify-between px-4 text-right active:bg-gray-50"
+              >
+                <span className="text-[14px] font-semibold text-gray-700">
+                  وضعیت موتور <span className="text-red-500">*</span>
+                </span>
+
+                <span
+                  className={`flex items-center gap-2 text-[14px] font-bold ${
+                    engineCondition ? "text-red-600" : "text-gray-400"
+                  }`}
+                >
+                  {engineCondition || "انتخاب"}
+                  <svg viewBox="0 0 24 24" fill="none" className="h-4 w-4">
+                    <path
+                      d="M9 5l7 7-7 7"
+                      stroke="currentColor"
+                      strokeWidth="1.7"
+                      strokeLinecap="round"
+                      strokeLinejoin="round"
+                    />
+                  </svg>
+                </span>
+              </button>
+
+
+
+              {/* بیمه */}
+              <button
+                type="button"
+                onClick={() => openPicker("insurance")}
+                className="flex min-h-[64px] w-full items-center justify-between px-4 text-right active:bg-gray-50"
+              >
+                <span className="text-[14px] font-semibold text-gray-700">
+                  مهلت بیمه شخص ثالث <span className="text-red-500">*</span>
+                </span>
+
+                <span
+                  className={`flex items-center gap-2 text-[14px] font-bold ${
+                    insuranceDeadline ? "text-red-600" : "text-gray-400"
+                  }`}
+                >
+                  {formatInsuranceDate(insuranceDeadline)}
+                  <svg viewBox="0 0 24 24" fill="none" className="h-4 w-4">
+                    <path
+                      d="M9 5l7 7-7 7"
+                      stroke="currentColor"
+                      strokeWidth="1.7"
+                      strokeLinecap="round"
+                      strokeLinejoin="round"
+                    />
+                  </svg>
+                </span>
+              </button>
+
+
+
+              {/* گیربکس */}
+              <button
+                type="button"
+                onClick={() => openPicker("gearboxType")}
+                className="flex min-h-[64px] w-full items-center justify-between px-4 text-right active:bg-gray-50"
+              >
+                <span className="text-[14px] font-semibold text-gray-700">
+                  نوع گیربکس <span className="text-red-500">*</span>
+                </span>
+
+                <span
+                  className={`flex items-center gap-2 text-[14px] font-bold ${
+                    gearboxType ? "text-red-600" : "text-gray-400"
+                  }`}
+                >
+                  {gearboxType || "انتخاب"}
+                  <svg viewBox="0 0 24 24" fill="none" className="h-4 w-4">
+                    <path
+                      d="M9 5l7 7-7 7"
+                      stroke="currentColor"
+                      strokeWidth="1.7"
+                      strokeLinecap="round"
+                      strokeLinejoin="round"
+                    />
+                  </svg>
+                </span>
+              </button>
+
+
+
+              {/* وضعیت گیربکس */}
+              <button
+                type="button"
+                onClick={() => openPicker("gearboxCondition")}
+                className="flex min-h-[64px] w-full items-center justify-between px-4 text-right active:bg-gray-50"
+              >
+                <span className="text-[14px] font-semibold text-gray-700">
+                  وضعیت گیربکس <span className="text-red-500">*</span>
+                </span>
+
+                <span
+                  className={`flex items-center gap-2 text-[14px] font-bold ${
+                    gearboxCondition ? "text-red-600" : "text-gray-400"
+                  }`}
+                >
+                  {gearboxCondition || "انتخاب"}
+                  <svg viewBox="0 0 24 24" fill="none" className="h-4 w-4">
+                    <path
+                      d="M9 5l7 7-7 7"
+                      stroke="currentColor"
+                      strokeWidth="1.7"
+                      strokeLinecap="round"
+                      strokeLinejoin="round"
+                    />
+                  </svg>
+                </span>
+              </button>
+
+              {/* توضیحات */}
+              <section className="box-border w-full max-w-full rounded-2xl bg-white p-4 shadow-sm ring-1 ring-gray-100">
+                <label
+                  htmlFor="vehicle-description"
+                  className="mb-2 block text-[13px] font-semibold text-gray-700"
+                >
+                  توضیحات
+                </label>
+
+                <textarea
+                  id="vehicle-description"
+                  value={description}
+                  onChange={(e) => setDescription(e.target.value)}
+                  rows={4}
+                  className="box-border block min-h-[110px] w-full max-w-full min-w-0 resize-none overflow-x-hidden rounded-xl border border-gray-200 bg-white px-3 py-3 text-[16px] leading-7 text-gray-900 outline-none placeholder:text-gray-400 focus:border-gray-300"
+                  placeholder="توضیحات خودرو..."
+                />
+              </section>
+
+
+                </>
+              )}
+
+            </div>
+          </section>
+
+          {/* انتخاب عکس */}
+          {imageSheetOpen && (
+            <div className="fixed inset-0 z-[80] flex items-end bg-black/30">
+              <button
+                type="button"
+                aria-label="بستن انتخاب عکس"
+                className="absolute inset-0"
+                onClick={() => setImageSheetOpen(false)}
+              />
+
+              <div
+                className="relative w-full rounded-t-3xl bg-white px-4 pb-8 pt-4 shadow-2xl"
+                dir="rtl"
+              >
+                <div className="mx-auto mb-5 h-1 w-10 rounded-full bg-gray-200" />
+
+                <h3 className="mb-4 text-center text-[17px] font-extrabold text-gray-950">
+                  انتخاب عکس
+                </h3>
+
+                <button
+                  type="button"
+                  onClick={() => cameraInputRef.current?.click()}
+                  className="flex min-h-[58px] w-full items-center gap-3 border-b border-gray-100 text-right"
+                >
+                  <span className="flex h-10 w-10 items-center justify-center rounded-xl bg-gray-100 text-gray-700">
+                    <svg
+                      viewBox="0 0 24 24"
+                      fill="none"
+                      className="h-5 w-5"
+                      aria-hidden="true"
+                    >
+                      <path
+                        d="M5 8.5A2.5 2.5 0 017.5 6h1.7l1.1-1.5h3.4L14.8 6h1.7A2.5 2.5 0 0119 8.5v8A2.5 2.5 0 0116.5 19h-9A2.5 2.5 0 015 16.5v-8Z"
+                        stroke="currentColor"
+                        strokeWidth="1.5"
+                        strokeLinejoin="round"
+                      />
+                      <circle
+                        cx="12"
+                        cy="12.5"
+                        r="3"
+                        stroke="currentColor"
+                        strokeWidth="1.5"
+                      />
+                    </svg>
+                  </span>
+
+                  <span className="text-[14px] font-bold text-gray-900">
+                    عکس با دوربین
+                  </span>
+                </button>
+
+                <button
+                  type="button"
+                  onClick={() => galleryInputRef.current?.click()}
+                  className="flex min-h-[58px] w-full items-center gap-3 text-right"
+                >
+                  <span className="flex h-10 w-10 items-center justify-center rounded-xl bg-gray-100 text-gray-700">
+                    <svg
+                      viewBox="0 0 24 24"
+                      fill="none"
+                      className="h-5 w-5"
+                      aria-hidden="true"
+                    >
+                      <rect
+                        x="4"
+                        y="4"
+                        width="16"
+                        height="16"
+                        rx="2"
+                        stroke="currentColor"
+                        strokeWidth="1.5"
+                      />
+                      <circle
+                        cx="9"
+                        cy="9"
+                        r="1.5"
+                        stroke="currentColor"
+                        strokeWidth="1.5"
+                      />
+                      <path
+                        d="M5.5 17l4.5-4.5 3.2 3.2 2.3-2.3 3 3.6"
+                        stroke="currentColor"
+                        strokeWidth="1.5"
+                        strokeLinecap="round"
+                        strokeLinejoin="round"
+                      />
+                    </svg>
+                  </span>
+
+                  <span className="text-[14px] font-bold text-gray-900">
+                    عکس از گالری
+                  </span>
+                </button>
+              </div>
+            </div>
+          )}
+
+          {/* picker */}
+          {pickerOpen && (
+            <div className="fixed inset-0 z-[60] bg-white" dir="rtl">
+              <div className="flex h-full flex-col">
+
+                <header className="flex h-16 shrink-0 items-center justify-between border-b border-gray-100 px-4">
+                  <button
+                    type="button"
+                    onClick={() => {
+                      setPickerOpen(null);
+                      setPickerSearch("");
+                    }}
+                    className="flex h-9 w-9 items-center justify-center rounded-full text-gray-600"
+                    aria-label="بازگشت"
+                  >
+                    <svg
+                      viewBox="0 0 24 24"
+                      fill="none"
+                      className="h-5 w-5"
+                    >
+                      <path
+                        d="M15 5l-7 7 7 7"
+                        stroke="currentColor"
+                        strokeWidth="1.8"
+                        strokeLinecap="round"
+                        strokeLinejoin="round"
+                      />
+                    </svg>
+                  </button>
+
+                  <h2 className="text-[17px] font-extrabold text-gray-950">
+                    {pickerOpen === "vehicle"
+                      ? "انتخاب برند و مدل"
+                      : pickerOpen === "year"
+                        ? "انتخاب سال تولید"
+                        : pickerOpen === "fuel"
+                          ? "انتخاب نوع سوخت"
+                          : pickerOpen === "color"
+                            ? "انتخاب رنگ"
+                            : pickerOpen === "mileage"
+                              ? "کارکرد"
+                              : pickerOpen === "price"
+                                ? "قیمت خودرو"
+                              : pickerOpen === "body"
+                                ? "وضعیت بدنه"
+                                : pickerOpen === "chassis"
+                                  ? "وضعیت شاسی"
+                                  : pickerOpen === "engine"
+                                    ? "وضعیت موتور"
+                                    : pickerOpen === "insurance"
+                                      ? "مهلت بیمه شخص ثالث"
+                                      : pickerOpen === "gearboxType"
+                                        ? "نوع گیربکس"
+                                        : "وضعیت گیربکس"}
+                  </h2>
+
+                  <div className="w-9" />
+                </header>
+
+                {pickerOpen !== "price" && pickerOpen !== "mileage" && pickerOpen !== "insurance" && (
+                  <div className="border-b border-gray-100 p-4">
+                    <div className="flex h-11 items-center rounded-xl bg-gray-100 px-3">
+                      <svg
+                        viewBox="0 0 24 24"
+                        fill="none"
+                        className="h-5 w-5 text-gray-400"
+                      >
+                        <circle
+                          cx="11"
+                          cy="11"
+                          r="6.5"
+                          stroke="currentColor"
+                          strokeWidth="1.6"
+                        />
+                        <path
+                          d="M16 16l4 4"
+                          stroke="currentColor"
+                          strokeWidth="1.6"
+                          strokeLinecap="round"
+                        />
+                      </svg>
+
+                      <input
+                        value={pickerSearch}
+                        onChange={(e) => setPickerSearch(e.target.value)}
+                        placeholder="جستجو"
+                        className="mr-2 w-full bg-transparent text-[14px] outline-none"
+                      />
+                    </div>
+                  </div>
+                )}
+
+                <div className="flex-1 overflow-y-auto">
+
+                  {pickerOpen === "vehicle" && (
+                    <div className="p-4">
+                      {!brandId ? (
+                        <div className="space-y-1">
+                          {vehicleBrands
+                            .filter((item) =>
+                              `${item.name_fa} ${item.name_en ?? ""}`
+                                .toLowerCase()
+                                .includes(pickerSearch.toLowerCase())
+                            )
+                            .map((item) => (
+                              <button
+                                key={item.id}
+                                type="button"
+                                onClick={() => selectBrandAndOpenModel(item)}
+                                className="flex min-h-[56px] w-full items-center justify-between border-b border-gray-100 px-2 text-right"
+                              >
+                                <span className="text-[14px] font-semibold text-gray-900">
+                                  {item.name_fa}
+                                </span>
+
+                                <svg
+                                  viewBox="0 0 24 24"
+                                  fill="none"
+                                  className="h-4 w-4 text-gray-400"
+                                  aria-hidden="true"
+                                >
+                                  <path
+                                    d="M9 5l7 7-7 7"
+                                    stroke="currentColor"
+                                    strokeWidth="1.7"
+                                    strokeLinecap="round"
+                                    strokeLinejoin="round"
+                                  />
+                                </svg>
+                              </button>
+                            ))}
+                        </div>
+                      ) : !modelId ? (
+                        <div className="space-y-1">
+                          <button
+                            type="button"
+                            onClick={() => {
+                              setBrandId("");
+                              setBrand("");
+                              setModelId("");
+                              setModel("");
+                              setTrim("");
+                              setVehicleModels([]);
+                              setVehicleTrims([]);
+                              setPickerSearch("");
+                            }}
+                            className="mb-3 text-[13px] font-semibold text-gray-500"
+                          >
+                            تغییر برند
+                          </button>
+
+                          {modelsLoading ? (
+                            <div className="py-8 text-center text-[13px] text-gray-400">
+                              در حال دریافت مدل‌ها...
+                            </div>
+                          ) : (
+                            vehicleModels
+                              .filter((item) =>
+                                `${item.name_fa} ${item.name_en ?? ""}`
+                                  .toLowerCase()
+                                  .includes(pickerSearch.toLowerCase())
+                              )
+                              .map((item) => (
+                                <button
+                                  key={item.id}
+                                  type="button"
+                                  onClick={() => selectVehicle(item)}
+                                  className="flex min-h-[56px] w-full items-center justify-between border-b border-gray-100 px-2 text-right"
+                                >
+                                  <span className="text-[14px] font-semibold text-gray-900">
+                                    {item.name_fa}
+                                  </span>
+
+                                  <svg
+                                    viewBox="0 0 24 24"
+                                    fill="none"
+                                    className="h-4 w-4 text-gray-400"
+                                    aria-hidden="true"
+                                  >
+                                    <path
+                                      d="M9 5l7 7-7 7"
+                                      stroke="currentColor"
+                                      strokeWidth="1.7"
+                                      strokeLinecap="round"
+                                      strokeLinejoin="round"
+                                    />
+                                  </svg>
+                                </button>
+                              ))
+                          )}
+                        </div>
+                      ) : (
+                        <div className="space-y-1">
+                          <button
+                            type="button"
+                            onClick={() => {
+                              setModelId("");
+                              setModel("");
+                              setTrim("");
+                              setVehicleTrims([]);
+                              setPickerSearch("");
+                            }}
+                            className="mb-3 text-[13px] font-semibold text-gray-500"
+                          >
+                            تغییر مدل
+                          </button>
+
+                          {trimsLoading ? (
+                            <div className="py-8 text-center text-[13px] text-gray-400">
+                              در حال دریافت تیپ‌ها...
+                            </div>
+                          ) : vehicleTrims.length === 0 ? (
+                            <button
+                              type="button"
+                              onClick={() => {
+                                setTrim("");
+                                setPickerOpen(null);
+                                setPickerSearch("");
+                              }}
+                              className="flex min-h-[56px] w-full border-b border-gray-100 px-2 text-right text-[14px] font-semibold text-gray-700"
+                            >
+                              بدون انتخاب تیپ
+                            </button>
+                          ) : (
+                            vehicleTrims
+                              .filter((item) =>
+                                `${item.name_fa} ${item.name_en ?? ""}`
+                                  .toLowerCase()
+                                  .includes(pickerSearch.toLowerCase())
+                              )
+                              .map((item) => (
+                                <button
+                                  key={item.id}
+                                  type="button"
+                                  onClick={() => selectTrim(item)}
+                                  className={`flex min-h-[56px] w-full items-center justify-between border-b border-gray-100 px-2 text-right ${
+                                    trim === item.name_fa
+                                      ? "text-red-600"
+                                      : "text-gray-900"
+                                  }`}
+                                >
+                                  <span className="text-[14px] font-semibold">
+                                    {item.name_fa}
+                                  </span>
+
+                                  <svg
+                                    viewBox="0 0 24 24"
+                                    fill="none"
+                                    className="h-4 w-4 text-gray-400"
+                                    aria-hidden="true"
+                                  >
+                                    <path
+                                      d="M9 5l7 7-7 7"
+                                      stroke="currentColor"
+                                      strokeWidth="1.7"
+                                      strokeLinecap="round"
+                                      strokeLinejoin="round"
+                                    />
+                                  </svg>
+                                </button>
+                              ))
+                          )}
+                        </div>
+                      )}
+                    </div>
+                  )}
+
+                  {pickerOpen === "year" && (
+                    <div className="grid grid-cols-3 gap-2 p-4">
+                      {Array.from({ length: 106 }, (_, index) => 1405 - index).map(
+                        (year) => (
+                          <button
+                            key={year}
+                            type="button"
+                            onClick={() => {
+                              setModelYear(String(year));
+                              setPickerOpen(null);
+                            }}
+                            className={`rounded-xl border py-3 text-[14px] font-bold ${
+                              modelYear === String(year)
+                                ? "border-red-500 bg-red-50 text-red-600"
+                                : "border-gray-200 text-gray-700"
+                            }`}
+                          >
+                            <span>
+                              {year.toLocaleString("fa-IR", {
+                                useGrouping: false,
+                              })}
+                              <span className="mx-1 text-gray-400">/</span>
+                              {year - 1405 + 2026}
+                            </span>
+                          </button>
+                        )
+                      )}
+                    </div>
+                  )}
+
+                  {pickerOpen === "fuel" && (
+                    <div className="space-y-1 p-4">
+                      {["بنزینی", "گازوئیلی", "دوگانه سوز", "هیبریدی", "برقی"]
+                        .filter((item) =>
+                          item.includes(pickerSearch)
+                        )
+                        .map((item) => (
+                          <button
+                            key={item}
+                            type="button"
+                            onClick={() => selectFuel(item)}
+                            className="flex min-h-[56px] w-full items-center justify-between border-b border-gray-100 px-2 text-right text-[14px] font-semibold"
+                          >
+                            {item}
+                          </button>
+                        ))}
+                    </div>
+                  )}
+
+                  {pickerOpen === "color" && (
+                    <div className="space-y-1 p-4">
+                      {[
+                        "سفید",
+                        "مشکی",
+                        "خاکستری",
+                        "نقره‌ای",
+                        "طوسی",
+                        "آبی",
+                        "سرمه‌ای",
+                        "آبی روشن",
+                        "قرمز",
+                        "زرشکی",
+                        "عنابی",
+                        "زرد",
+                        "طلایی",
+                        "سبز",
+                        "سبز روشن",
+                        "زیتونی",
+                        "قهوه‌ای",
+                        "کرم",
+                        "بژ",
+                        "نارنجی",
+                        "صورتی",
+                        "بنفش",
+                        "مسی",
+                        "دودی",
+                        "نوک‌مدادی",
+                        "نقره‌ای متالیک",
+                        "سفید صدفی",
+                        "مشکی متالیک"
+                      ]
+                        .filter((item) => item.includes(pickerSearch))
+                        .map((item) => (
+                          <button
+                            key={item}
+                            type="button"
+                            onClick={() => selectColor(item)}
+                            className="flex min-h-[56px] w-full items-center justify-between border-b border-gray-100 px-2 text-right text-[14px] font-semibold"
+                          >
+                            {item}
+                          </button>
+                        ))}
+                    </div>
+                  )}
+
+                  {(pickerOpen === "mileage" || pickerOpen === "price") && (
+                <div className="p-4">
+                  <label
+                    className="mb-2 block text-[13px] font-semibold text-gray-600"
+                  >
+                    {pickerOpen === "mileage"
+                      ? "کارکرد (کیلومتر)"
+                      : "قیمت خودرو (تومان)"}
+                  </label>
+
+                  <input
+                    autoFocus
+                    type="text"
+                    inputMode="numeric"
+                    value={pickerOpen === "mileage" ? mileage : price}
+                    onChange={(e) => {
+                      const value = normalizeDigits(e.target.value);
+
+                      if (pickerOpen === "mileage") {
+                        setMileage(value);
+                      } else {
+                        setPrice(value);
+                      }
+                    }}
+                    placeholder={
+                      pickerOpen === "mileage"
+                        ? "مثلاً ۸۵٬۰۰۰"
+                        : "مثلاً ۲۰۰٬۰۰۰٬۰۰۰"
+                    }
+                    className="box-border w-full rounded-xl border border-gray-200 bg-white px-4 py-4 text-[16px] text-gray-900 outline-none focus:border-gray-400"
+                  />
+
+                  {pickerOpen === "price" && price && (
+                    <p className="mt-3 text-center text-[14px] font-bold text-gray-600">
+                      {Number(
+                        price.replace(/[^0-9]/g, "") || 0
+                      ).toLocaleString("fa-IR")}{" "}
+                      تومان
+                    </p>
+                  )}
+
+                  <button
+                    type="button"
+                    onClick={() => {
+                      const value =
+                        pickerOpen === "mileage" ? mileage : price;
+
+                      if (!value.trim()) {
+                        setError(
+                          pickerOpen === "mileage"
+                            ? "کارکرد را وارد کنید."
+                            : "قیمت خودرو را وارد کنید."
+                        );
+                        return;
+                      }
+
+                      setError("");
+                      setPickerOpen(null);
+                    }}
+                    className="mt-4 w-full rounded-xl bg-gray-900 py-3.5 text-[14px] font-bold text-white"
+                  >
+                    تأیید
+                  </button>
+                </div>
+              )}
+
+              {pickerOpen === "body" && (
+                    <div className="space-y-1 p-4">
+                      {["سالم", "رنگ‌شدگی", "تعویض", "تصادفی"]
+                        .filter((item) => item.includes(pickerSearch))
+                        .map((item) => (
+                          <button
+                            key={item}
+                            type="button"
+                            onClick={() => {
+                              setBodyCondition(item);
+                              setPickerOpen(null);
+                            }}
+                            className="flex min-h-[56px] w-full border-b border-gray-100 px-2 text-right text-[14px] font-semibold"
+                          >
+                            {item}
+                          </button>
+                        ))}
+                    </div>
+                  )}
+
+                  {pickerOpen === "chassis" && (
+                    <div className="space-y-1 p-4">
+                      {["سالم", "ضربه‌خورده", "شاسی‌کشیده", "تعویض"]
+                        .filter((item) => item.includes(pickerSearch))
+                        .map((item) => (
+                          <button
+                            key={item}
+                            type="button"
+                            onClick={() => {
+                              setChassisCondition(item);
+                              setPickerOpen(null);
+                            }}
+                            className="flex min-h-[56px] w-full border-b border-gray-100 px-2 text-right text-[14px] font-semibold"
+                          >
+                            {item}
+                          </button>
+                        ))}
+                    </div>
+                  )}
+
+                  {pickerOpen === "engine" && (
+                    <div className="space-y-1 p-4">
+                      {["سالم", "نیاز به تعمیر", "تعمیر اساسی", "تعویض"]
+                        .filter((item) => item.includes(pickerSearch))
+                        .map((item) => (
+                          <button
+                            key={item}
+                            type="button"
+                            onClick={() => {
+                              setEngineCondition(item);
+                              setPickerOpen(null);
+                            }}
+                            className="flex min-h-[56px] w-full border-b border-gray-100 px-2 text-right text-[14px] font-semibold"
+                          >
+                            {item}
+                          </button>
+                        ))}
+                    </div>
+                  )}
+
+                  {pickerOpen === "insurance" && (
+                <div className="grid grid-cols-2 gap-2 p-4">
+                  {Array.from({ length: 12 }, (_, index) => index + 1).map(
+                    (months) => (
+                      <button
+                        key={months}
+                        type="button"
+                        onClick={() => {
+                          const base = new Date();
+                          const day = base.getDate();
+
+                          const target = new Date(
+                            base.getFullYear(),
+                            base.getMonth() + months,
+                            1
+                          );
+
+                          const lastDay = new Date(
+                            target.getFullYear(),
+                            target.getMonth() + 1,
+                            0
+                          ).getDate();
+
+                          target.setDate(Math.min(day, lastDay));
+
+                          const yyyy = target.getFullYear();
+                          const mm = String(target.getMonth() + 1).padStart(
+                            2,
+                            "0"
+                          );
+                          const dd = String(target.getDate()).padStart(2, "0");
+
+                          setInsuranceDeadline(`${yyyy}-${mm}-${dd}`);
+                          setInsuranceMonths(months);
+                          setError("");
+                          setPickerOpen(null);
+                        }}
+                        className={`rounded-xl border py-4 text-[14px] font-bold ${
+                          insuranceMonths === months
+                            ? "border-red-500 bg-red-50 text-red-600"
+                            : "border-gray-200 text-gray-700"
+                        }`}
+                      >
+                        {months.toLocaleString("fa-IR")} ماه
+                      </button>
+                    )
+                  )}
+                </div>
+              )}
+
+              {pickerOpen === "gearboxType" && (
+                    <div className="space-y-1 p-4">
+                      {["دنده‌ای", "اتوماتیک", "CVT", "دوکلاچه", "AMT"]
+                        .filter((item) => item.includes(pickerSearch))
+                        .map((item) => (
+                          <button
+                            key={item}
+                            type="button"
+                            onClick={() => {
+                              setGearboxType(item);
+                              setPickerOpen(null);
+                            }}
+                            className="flex min-h-[56px] w-full border-b border-gray-100 px-2 text-right text-[14px] font-semibold"
+                          >
+                            {item}
+                          </button>
+                        ))}
+                    </div>
+                  )}
+
+                  {pickerOpen === "gearboxCondition" && (
+                    <div className="space-y-1 p-4">
+                      {["سالم", "نیاز به تعمیر", "تعویض"]
+                        .filter((item) => item.includes(pickerSearch))
+                        .map((item) => (
+                          <button
+                            key={item}
+                            type="button"
+                            onClick={() => {
+                              setGearboxCondition(item);
+                              setPickerOpen(null);
+                            }}
+                            className="flex min-h-[56px] w-full border-b border-gray-100 px-2 text-right text-[14px] font-semibold"
+                          >
+                            {item}
+                          </button>
+                        ))}
+                    </div>
+                  )}
+
+                </div>
+              </div>
+            </div>
+          )}
+
+          <button
+            type="submit"
+            disabled={saving || inspectionLoading}
+            className="w-full rounded-2xl bg-gray-900 py-4 text-[14px] font-extrabold text-white disabled:opacity-50"
+          >
+            {saving
+              ? "در حال ذخیره..."
+              : currentStep < 3
+                ? "ادامه"
+                : "ثبت خودرو"}
+          </button>
+        </form>
+      </div>
+    </main>
+  );
+}
