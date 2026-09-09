@@ -41,6 +41,19 @@ export type CheckVehicleDuplicateInput = {
   excludeVehicleId?: string | null;
 };
 
+export type VehicleBodyInspectionInput = {
+  partCode: string;
+  condition: string;
+  paintThicknessMicrons: number | null;
+  notes: string | null;
+};
+
+export type VehicleImageInput = {
+  storagePath: string;
+  thumbnailPath: string;
+  sortOrder: number;
+};
+
 async function getAuthorizedContext() {
   const supabase = await createClient();
   const { data: claimsData } = await supabase.auth.getClaims();
@@ -68,6 +81,28 @@ function canAccessDealership(
   dealershipId: string,
 ) {
   return profile.role === "admin" || profile.dealership_id === dealershipId;
+}
+
+async function canAccessVehicle(
+  supabase: Awaited<ReturnType<typeof createClient>>,
+  profile: { dealership_id: string | null; role: string | null },
+  vehicleId: string,
+) {
+  const { data: vehicle, error } = await supabase
+    .from("vehicles")
+    .select("dealership_id")
+    .eq("id", vehicleId)
+    .single();
+
+  if (error || !vehicle) {
+    return { ok: false as const, error: "خودرو پیدا نشد." };
+  }
+
+  if (!canAccessDealership(profile, vehicle.dealership_id)) {
+    return { ok: false as const, error: "شما اجازه دسترسی به این خودرو را ندارید." };
+  }
+
+  return { ok: true as const };
 }
 
 export async function checkVehicleDuplicateAction(
@@ -144,6 +179,61 @@ export async function createVehicleAction(
   }
 
   return { ok: true as const, vehicleId: vehicle.id };
+}
+
+export async function createVehicleBodyInspectionAction(
+  vehicleId: string,
+  inspections: VehicleBodyInspectionInput[],
+): Promise<VehicleMutationResult> {
+  if (inspections.length === 0) return { ok: true };
+
+  const context = await getAuthorizedContext();
+  if (!context.ok) return { ok: false, error: context.error };
+
+  const access = await canAccessVehicle(context.supabase, context.profile, vehicleId);
+  if (!access.ok) return access;
+
+  const { error } = await context.supabase
+    .from("vehicle_body_inspections")
+    .insert(
+      inspections.map((item) => ({
+        vehicle_id: vehicleId,
+        part_code: item.partCode,
+        condition: item.condition,
+        paint_thickness_microns: item.paintThicknessMicrons,
+        notes: item.notes,
+      })),
+    );
+
+  if (error) return { ok: false, error: error.message };
+  return { ok: true };
+}
+
+export async function createVehicleImageRowsAction(
+  vehicleId: string,
+  images: VehicleImageInput[],
+): Promise<VehicleMutationResult> {
+  if (images.length === 0) return { ok: true };
+
+  const context = await getAuthorizedContext();
+  if (!context.ok) return { ok: false, error: context.error };
+
+  const access = await canAccessVehicle(context.supabase, context.profile, vehicleId);
+  if (!access.ok) return access;
+
+  const { error } = await context.supabase
+    .from("vehicle_images")
+    .insert(
+      images.map((item) => ({
+        vehicle_id: vehicleId,
+        storage_path: item.storagePath,
+        thumbnail_path: item.thumbnailPath,
+        sort_order: item.sortOrder,
+      })),
+    );
+
+  if (error) return { ok: false, error: error.message };
+  return { ok: true };
 }
 
 export async function updateVehicleAction(
