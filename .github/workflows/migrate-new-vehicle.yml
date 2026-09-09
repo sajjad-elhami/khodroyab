@@ -1,0 +1,316 @@
+name: migrate-new-vehicle-client
+
+on:
+  push:
+    branches:
+      - architecture/mutation-server-actions
+
+permissions:
+  contents: write
+
+jobs:
+  migrate:
+    if: github.actor == 'sajjad-elhami'
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+        with:
+          ref: architecture/mutation-server-actions
+          fetch-depth: 0
+
+      - uses: actions/setup-node@v4
+        with:
+          node-version: 20
+          cache: npm
+
+      - name: Apply mutation-boundary codemod
+        shell: python
+        run: |
+          from pathlib import Path
+          import re
+
+          path = Path("src/app/vehicles/new/NewVehicleClient.tsx")
+          s = path.read_text()
+          original = s
+
+          import_anchor = 'import { processVehicleImage } from "@/lib/images/processVehicleImage";'
+          action_import = import_anchor + '\nimport {\n  checkVehicleDuplicateAction,\n  createVehicleAction,\n  createVehicleBodyInspectionAction,\n  createVehicleImageRowsAction,\n  rollbackVehicleCreationAction,\n} from "../mutations";'
+          if action_import not in s:
+              if import_anchor not in s:
+                  raise SystemExit("Expected image import anchor not found")
+              s = s.replace(import_anchor, action_import, 1)
+
+          duplicate_pattern = re.compile(r'''  async function checkVehicleDuplicates\(\) \{.*?\n  \}\n\n  useEffect\(\(\) => \{''', re.S)
+          duplicate_replacement = '''  async function checkVehicleDuplicates() {
+    if (!dealershipId || !brand.trim() || !model.trim()) {
+      setDuplicateVehicles([]);
+      return;
+    }
+
+    setDuplicateChecking(true);
+
+    const result = await checkVehicleDuplicateAction({
+      dealershipId,
+      brand,
+      model,
+      trim: trim.trim() || null,
+      modelYear: modelYear ? Number(modelYear) : null,
+      mileage: mileage ? Number(mileage) : null,
+      color: color.trim() || null,
+      excludeVehicleId: null,
+    });
+
+    if (result.ok) {
+      setDuplicateVehicles((result.data ?? []) as DuplicateVehicle[]);
+    } else {
+      setDuplicateVehicles([]);
+    }
+
+    setDuplicateChecking(false);
+  }
+
+  useEffect(() => {'''
+          s, n = duplicate_pattern.subn(duplicate_replacement, s, count=1)
+          if n != 1:
+              raise SystemExit("Expected duplicate-check function block not found")
+
+          old_create_prefix = '''    const supabase = createClient();
+
+    const {
+      data: { session },
+      error: userError,
+    } = await supabase.auth.getSession();
+    const user = session?.user;
+
+    if (userError || !user) {
+      setError("کاربر وارد سیستم نشده است.");
+      setSaving(false);
+      return;
+    }
+
+    const { data: profile, error: profileError } = await supabase
+      .from("profiles")
+      .select("dealership_id, role")
+      .eq("id", user.id)
+      .single();
+
+    if (profileError || !profile) {
+      setError("اطلاعات حساب کاربری دریافت نشد.");
+      setSaving(false);
+      return;
+    }
+
+    const isAdmin = profile.role === "admin";
+
+    if (!isAdmin && profile.dealership_id !== dealershipId) {
+      setError("شما اجازه ثبت خودرو برای این نمایشگاه را ندارید.");
+      setSaving(false);
+      return;
+    }
+
+    const { data: vehicle, error: vehicleError } =
+      await supabase
+        .from("vehicles")
+        .insert({
+          dealership_id: dealershipId,
+          brand: brand.trim(),
+          model: model.trim(),
+          trim: trim.trim() || null,
+          model_year: yearValue,
+          mileage: mileageValue,
+          color: color.trim() || null,
+          price: priceValue,
+          description: description.trim() || null,
+          status,
+          transmission: gearboxType || selectedTrim?.transmission || null,
+          fuel_type: fuelType || selectedTrim?.fuel_type || null,
+          body_condition: bodyCondition || null,
+          chassis_condition: chassisCondition || null,
+          engine_condition: engineCondition || null,
+          insurance_expiry_date: insuranceDeadline || null,
+          gearbox_condition: gearboxCondition || null,
+      })
+        .select("id")
+        .single();
+
+    if (vehicleError || !vehicle) {
+      setError(vehicleError?.message ?? "ثبت خودرو ناموفق بود.");
+      setSaving(false);
+      return;
+    }
+'''
+          new_create_prefix = '''    const vehicleResult = await createVehicleAction({
+      dealershipId,
+      brand,
+      model,
+      trim: trim.trim() || null,
+      modelYear: yearValue,
+      mileage: mileageValue,
+      color: color.trim() || null,
+      price: priceValue,
+      description: description.trim() || null,
+      status: status as "available" | "sold",
+      transmission: gearboxType || selectedTrim?.transmission || null,
+      fuelType: fuelType || selectedTrim?.fuel_type || null,
+      bodyCondition: bodyCondition || null,
+      chassisCondition: chassisCondition || null,
+      engineCondition: engineCondition || null,
+      insuranceExpiryDate: insuranceDeadline || null,
+      gearboxCondition: gearboxCondition || null,
+    });
+
+    if (!vehicleResult.ok) {
+      setError(vehicleResult.error);
+      setSaving(false);
+      return;
+    }
+
+    const vehicleId = vehicleResult.vehicleId;
+    const isAdmin = vehicleResult.isAdmin;
+'''
+          if old_create_prefix not in s:
+              raise SystemExit("Expected direct vehicle creation block not found")
+          s = s.replace(old_create_prefix, new_create_prefix, 1)
+
+          inspection_pattern = re.compile(r'''    /\*\n     \* ذخیره کارشناسی بدنه\n     \*/\n    if \(bodyInspection\.length > 0\) \{.*?\n    \}\n\n    /\*\n     \* آپلود تصاویر\n     \*/''', re.S)
+          inspection_replacement = '''    /*
+     * ذخیره کارشناسی بدنه
+     */
+    if (bodyInspection.length > 0) {
+      const inspectionResult = await createVehicleBodyInspectionAction(
+        vehicleId,
+        bodyInspection.map((item) => ({
+          partCode: item.part_code,
+          condition: item.condition,
+          paintThicknessMicrons: item.paint_thickness_microns,
+          notes: item.notes,
+        })),
+      );
+
+      if (!inspectionResult.ok) {
+        await rollbackVehicleCreationAction(vehicleId);
+        setError(
+          `ذخیره کارشناسی بدنه ناموفق بود: ${inspectionResult.error}`
+        );
+        setSaving(false);
+        return;
+      }
+    }
+
+    /*
+     * آپلود تصاویر
+     */'''
+          s, n = inspection_pattern.subn(inspection_replacement, s, count=1)
+          if n != 1:
+              raise SystemExit("Expected inspection block not found")
+
+          image_section_pattern = re.compile(r'''  const uploadedImagePaths: string\[\] = \[\];\n\n  try \{.*?\n  \} catch \(imageError\) \{.*?\n    setSaving\(false\);\n    return;\n  \}\n''', re.S)
+          image_section_replacement = '''  const uploadedImagePaths: string[] = [];
+  const imageRows: Array<{
+    storagePath: string;
+    thumbnailPath: string;
+    sortOrder: number;
+  }> = [];
+
+  try {
+    for (let i = 0; i < images.length; i++) {
+      const sourceFile = images[i];
+
+      const processed = await processVehicleImage(sourceFile);
+      const fileId = crypto.randomUUID();
+
+      const storagePath =
+        `${vehicleId}/gallery/${fileId}.webp`;
+
+      const thumbnailPath =
+        `${vehicleId}/gallery/thumb/${fileId}.webp`;
+
+      const { error: mainUploadError } = await supabase.storage
+        .from("vehicle-images")
+        .upload(storagePath, processed.mainFile, {
+          cacheControl: "31536000",
+          upsert: false,
+          contentType: "image/webp",
+        });
+
+      if (mainUploadError) {
+        throw new Error(
+          `آپلود تصویر "${sourceFile.name}" ناموفق بود: ${mainUploadError.message}`
+        );
+      }
+
+      uploadedImagePaths.push(storagePath);
+
+      const { error: thumbnailUploadError } =
+        await supabase.storage
+          .from("vehicle-images")
+          .upload(thumbnailPath, processed.thumbnailFile, {
+            cacheControl: "31536000",
+            upsert: false,
+            contentType: "image/webp",
+          });
+
+      if (thumbnailUploadError) {
+        throw new Error(
+          `آپلود thumbnail تصویر "${sourceFile.name}" ناموفق بود: ${thumbnailUploadError.message}`
+        );
+      }
+
+      uploadedImagePaths.push(thumbnailPath);
+      imageRows.push({ storagePath, thumbnailPath, sortOrder: i });
+    }
+
+    const imageRowsResult = await createVehicleImageRowsAction(
+      vehicleId,
+      imageRows,
+    );
+
+    if (!imageRowsResult.ok) {
+      throw new Error(
+        `ثبت اطلاعات تصاویر ناموفق بود: ${imageRowsResult.error}`
+      );
+    }
+  } catch (imageError) {
+    // Storage uploads remain client-side; only DB mutations cross the server action boundary.
+    if (uploadedImagePaths.length > 0) {
+      await supabase.storage
+        .from("vehicle-images")
+        .remove(uploadedImagePaths);
+    }
+
+    await rollbackVehicleCreationAction(vehicleId);
+
+    setError(
+      imageError instanceof Error
+        ? imageError.message
+        : "پردازش یا آپلود تصویر ناموفق بود."
+    );
+    setSaving(false);
+    return;
+  }
+'''
+          s, n = image_section_pattern.subn(image_section_replacement, s, count=1)
+          if n != 1:
+              raise SystemExit("Expected image upload section not found")
+
+          if 'supabase.auth.getSession()' in s or '.from("vehicles")\n        .insert(' in s or '.from("vehicle_body_inspections")\n        .insert(' in s or '.from("vehicle_images")\n        .insert(' in s or '.from("vehicles")\n          .delete()' in s:
+              raise SystemExit("Direct vehicle DB mutation/auth code still remains")
+
+          if s == original:
+              raise SystemExit("No changes made")
+
+          path.write_text(s)
+
+      - name: Install dependencies and verify build
+        run: npm ci && npm run build
+
+      - name: Commit migration and remove temporary workflow
+        shell: bash
+        run: |
+          git config user.name "github-actions[bot]"
+          git config user.email "41898282+github-actions[bot]@users.noreply.github.com"
+          rm -f .github/workflows/migrate-new-vehicle.yml
+          git add src/app/vehicles/new/NewVehicleClient.tsx .github/workflows/migrate-new-vehicle.yml
+          git diff --cached --quiet && exit 0
+          git commit -m "refactor: route new vehicle mutations through server actions"
+          git push origin architecture/mutation-server-actions
