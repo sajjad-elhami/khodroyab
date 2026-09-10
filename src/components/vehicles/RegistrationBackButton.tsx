@@ -6,7 +6,9 @@ export default function RegistrationBackButton() {
   const router = useRouter();
 
   function handleBack() {
-    const event = new CustomEvent("khodroyab:registration-back");
+    const event = new CustomEvent("khodroyab:registration-back", {
+      cancelable: true,
+    });
     window.dispatchEvent(event);
 
     window.setTimeout(() => {
