@@ -1,237 +1,144 @@
 "use client";
 
-import { normalizeDigits } from "@/lib/utils/numberInput";
 import { useEffect, useMemo, useRef, useState } from "react";
-import { createClient } from "@/lib/supabase/client";
-import { getVehicleModelsByBrand, getVehicleTrimsByModel } from "@/lib/data/catalog/clientCatalog";
 import { useParams, useRouter } from "next/navigation";
-import AdminLayout from "@/components/admin/AdminLayout";
+import { createClient } from "@/lib/supabase/client";
+import { normalizeDigits } from "@/lib/utils/numberInput";
+import { getVehicleModelsByBrand, getVehicleTrimsByModel } from "@/lib/data/catalog/clientCatalog";
 import { processVehicleImage } from "@/lib/images/processVehicleImage";
+import KhodroyabChevronIcon from "@/components/vehicles/KhodroyabChevronIcon";
 import VehicleBodyInspection, { type BodyPart, type Inspection } from "@/components/vehicles/VehicleBodyInspection";
 import type { VehicleEditPageData } from "@/lib/data/vehicles/getVehicleEditPageData";
-import VehicleCatalogSearch, { type VehicleCatalogSelection } from "@/components/admin/VehicleCatalogSearch";
-import { checkVehicleDuplicateAction, createVehicleImageRowsAction, replaceVehicleBodyInspectionAction } from "../../mutations";
+import { createVehicleImageRowsAction, replaceVehicleBodyInspectionAction } from "../../mutations";
 import { updateEditableVehicleAction, deleteVehicleImageAction } from "./editActions";
 
-type DuplicateVehicle = {
-  vehicle_id: string; brand: string; model: string; trim_name: string | null;
-  model_year: number | null; mileage: number | null; color: string | null;
-  price: number | null; status: string; created_at: string; similarity_score: number;
-  match_level: "strong" | "possible" | "weak";
-};
-
-type VehicleModel = VehicleEditPageData["models"][number];
-type VehicleTrim = VehicleEditPageData["trims"][number];
-type VehicleImage = VehicleEditPageData["images"][number];
-
 const MAX_IMAGE_SIZE = 10 * 1024 * 1024;
-const MAX_VEHICLE_IMAGES = 10;
+const MAX_IMAGES = 10;
+const YEARS = Array.from({ length: 106 }, (_, i) => 1405 - i);
+const FUEL_OPTIONS = ["بنزین", "گازوئیل", "دوگانه‌سوز", "هیبرید", "برقی"];
+const COLOR_OPTIONS = ["سفید", "مشکی", "نقره‌ای", "خاکستری", "نوک‌مدادی", "آبی", "قرمز", "قهوه‌ای", "طلایی", "سبز", "زرد", "سایر"];
+const CHASSIS_OPTIONS = ["سالم", "ضربه‌دار", "کشیده‌شده", "جوش‌خورده", "تعویض‌شده", "تعمیرشده", "نامشخص"];
+const ENGINE_OPTIONS = ["سالم", "نیاز به بررسی", "تعمیرشده", "تعویض‌شده", "نامشخص"];
+const GEARBOX_OPTIONS = ["سالم", "نیاز به بررسی", "تعمیرشده", "تعویض‌شده", "نامشخص"];
+const GEARBOX_TYPES = ["دنده‌ای", "اتوماتیک", "CVT", "دوگانه‌کلاچه", "برقی"];
+
+type Picker = "vehicle" | "mileage" | "fuel" | "year" | "color" | "price" | "chassis" | "engine" | "insurance" | "gearboxType" | "gearboxCondition" | null;
+type Model = VehicleEditPageData["models"][number];
+type Trim = VehicleEditPageData["trims"][number];
+type Image = VehicleEditPageData["images"][number];
+
+function formatPersianInteger(value: string) { const digits = normalizeDigits(value).replace(/\D/g, ""); return digits.replace(/\B(?=(\d{3})+(?!\d))/g, "٬").replace(/\d/g, d => "۰۱۲۳۴۵۶۷۸۹"[Number(d)]); }
+function parseChassis(value: string | null) { try { const x = value ? JSON.parse(value) : {}; return { front: x.front ?? "", rear: x.rear ?? "" }; } catch { return { front: "", rear: "" }; } }
 
 export default function EditVehicleClient({ initialData }: { initialData: VehicleEditPageData }) {
-  const params = useParams();
   const router = useRouter();
+  const params = useParams();
   const id = params.id as string;
   const supabase = useMemo(() => createClient(), []);
   const vehicle = initialData.vehicle;
+  const parsedChassis = parseChassis(vehicle?.chassis_condition ?? null);
 
+  const [step, setStep] = useState(1);
+  const [picker, setPicker] = useState<Picker>(null);
+  const [pickerSearch, setPickerSearch] = useState("");
+  const [chassisTarget, setChassisTarget] = useState<"front" | "rear">("front");
   const [saving, setSaving] = useState(false);
   const [error, setError] = useState(vehicle ? "" : "خودرو پیدا نشد.");
-  const [duplicateVehicles, setDuplicateVehicles] = useState<DuplicateVehicle[]>([]);
-  const [duplicateChecking, setDuplicateChecking] = useState(false);
-  const [vehicleModels, setVehicleModels] = useState<VehicleModel[]>(initialData.models);
-  const [vehicleTrims, setVehicleTrims] = useState<VehicleTrim[]>(initialData.trims);
   const [brandId, setBrandId] = useState(initialData.selectedBrandId ?? "");
   const [modelId, setModelId] = useState(initialData.selectedModelId ?? "");
   const [brand, setBrand] = useState(vehicle?.brand ?? "");
   const [model, setModel] = useState(vehicle?.model ?? "");
   const [trim, setTrim] = useState(vehicle?.trim ?? "");
+  const [models, setModels] = useState<Model[]>(initialData.models);
+  const [trims, setTrims] = useState<Trim[]>(initialData.trims);
   const [modelYear, setModelYear] = useState(vehicle?.model_year == null ? "" : String(vehicle.model_year));
   const [mileage, setMileage] = useState(vehicle?.mileage == null ? "" : String(vehicle.mileage));
   const [color, setColor] = useState(vehicle?.color ?? "");
   const [price, setPrice] = useState(vehicle?.price == null ? "" : String(vehicle.price));
+  const [fuelType, setFuelType] = useState(vehicle?.fuel_type ?? "");
+  const [gearboxType, setGearboxType] = useState(vehicle?.transmission ?? "");
+  const [gearboxCondition, setGearboxCondition] = useState(vehicle?.gearbox_condition ?? "");
+  const [engineCondition, setEngineCondition] = useState(vehicle?.engine_condition ?? "");
+  const [insuranceDeadline, setInsuranceDeadline] = useState(vehicle?.insurance_expiry_date ?? "");
+  const [frontChassisCondition, setFrontChassisCondition] = useState(parsedChassis.front);
+  const [rearChassisCondition, setRearChassisCondition] = useState(parsedChassis.rear);
   const [description, setDescription] = useState(vehicle?.description ?? "");
-  const [status, setStatus] = useState(vehicle?.status ?? "available");
-  const [bodyParts] = useState<BodyPart[]>(initialData.bodyParts);
-  const [bodyInspection, setBodyInspection] = useState<Inspection[]>(initialData.bodyInspection);
-  const [images, setImages] = useState<VehicleImage[]>(initialData.images);
+  const [bodyParts] = useState<BodyPart[]>(initialData.bodyParts as BodyPart[]);
+  const [bodyInspection, setBodyInspection] = useState<Inspection[]>(initialData.bodyInspection as Inspection[]);
+  const [existingImages, setExistingImages] = useState<Image[]>(initialData.images as Image[]);
   const [newImages, setNewImages] = useState<File[]>([]);
+  const [imageSheetOpen, setImageSheetOpen] = useState(false);
   const [deletingImageId, setDeletingImageId] = useState<string | null>(null);
-  const initialDuplicateSignature = useRef(JSON.stringify([vehicle?.dealership_id ?? "", brand, model, trim, modelYear, mileage, color]));
+  const cameraInputRef = useRef<HTMLInputElement>(null);
+  const galleryInputRef = useRef<HTMLInputElement>(null);
+  const newImagePreviews = useMemo(() => newImages.map((file, index) => ({ file, index, url: URL.createObjectURL(file) })), [newImages]);
+  useEffect(() => () => newImagePreviews.forEach(x => URL.revokeObjectURL(x.url)), [newImagePreviews]);
 
-  async function loadModels(selectedBrandId: string) {
-    const models = await getVehicleModelsByBrand(supabase, selectedBrandId);
-    setVehicleModels(models as VehicleModel[]); return models as VehicleModel[];
+  async function loadModels(value: string) { const result = await getVehicleModelsByBrand(supabase, value); setModels(result as Model[]); return result as Model[]; }
+  async function loadTrims(value: string) { const result = await getVehicleTrimsByModel(supabase, value); setTrims(result as Trim[]); return result as Trim[]; }
+  function openPicker(value: Picker) { setPickerSearch(""); setPicker(value); }
+  function closePicker() { setPicker(null); setPickerSearch(""); }
+
+  async function selectBrand(item: VehicleEditPageData["brands"][number]) { setBrandId(item.id); setBrand(item.name_fa); setModelId(""); setModel(""); setTrim(""); setTrims([]); closePicker(); try { const result = await loadModels(item.id); setModels(result); openPicker("vehicle"); } catch { setError("دریافت مدل‌ها ناموفق بود."); } }
+  async function selectModel(item: Model) { setModelId(item.id); setModel(item.name_fa); setTrim(""); setTrims([]); closePicker(); try { const result = await loadTrims(item.id); setTrims(result); openPicker("vehicle"); } catch { setError("دریافت تیپ‌ها ناموفق بود."); } }
+  function selectTrim(item: Trim) { setTrim(item.name_fa); if (item.fuel_type) setFuelType(item.fuel_type); if (item.transmission) setGearboxType(item.transmission); closePicker(); }
+  function handleNewImages(files: FileList | null) { if (!files) return; const selected = Array.from(files); const remaining = MAX_IMAGES - existingImages.length - newImages.length; if (remaining <= 0) { setError("حداکثر ۱۰ تصویر برای هر خودرو مجاز است."); return; } const accepted = selected.slice(0, remaining); const invalid = accepted.find(file => !file.type.startsWith("image/")); if (invalid) { setError("فقط فایل‌های تصویری قابل انتخاب هستند."); return; } const oversized = accepted.find(file => file.size > MAX_IMAGE_SIZE); if (oversized) { setError(`حجم فایل «${oversized.name}» بیشتر از ۱۰ مگابایت است.`); return; } setNewImages(current => [...current, ...accepted]); setError(""); setImageSheetOpen(false); }
+  async function deleteExistingImage(image: Image) { if (!window.confirm("آیا مطمئنی می‌خواهی این تصویر حذف شود؟")) return; setDeletingImageId(image.id); const result = await deleteVehicleImageAction(image.id, id); if (!result.ok) { setError(`حذف تصویر ناموفق بود: ${result.error}`); setDeletingImageId(null); return; } setExistingImages(current => current.filter(x => x.id !== image.id)); setDeletingImageId(null); }
+
+  function validate(s: number) {
+    if (s === 1) { if (existingImages.length + newImages.length === 0) return "حداقل یک عکس برای آگهی اضافه کنید."; if (!brand.trim() || !model.trim()) return "برند و مدل خودرو الزامی است."; if (trims.length > 0 && !trim.trim()) return "تیپ خودرو را انتخاب کنید."; }
+    if (s === 2) { if (!mileage.trim()) return "کارکرد خودرو الزامی است."; if (!fuelType.trim()) return "نوع سوخت خودرو را انتخاب کنید."; if (!modelYear.trim()) return "مدل (سال تولید) الزامی است."; if (!color.trim()) return "رنگ خودرو را انتخاب کنید."; if (!price.trim()) return "قیمت خودرو الزامی است."; const year = Number(modelYear), km = Number(mileage), amount = Number(price); if (!Number.isInteger(year) || year < 1300 || year > 1405) return "سال مدل باید بین ۱۳۰۰ تا ۱۴۰۵ باشد."; if (!Number.isInteger(km) || km < 0) return "کارکرد باید یک عدد صحیح بزرگ‌تر یا مساوی صفر باشد."; if (!Number.isInteger(amount) || amount < 0) return "قیمت باید یک عدد صحیح بزرگ‌تر یا مساوی صفر باشد."; }
+    if (s === 3 && (!frontChassisCondition.trim() || !rearChassisCondition.trim())) return "وضعیت شاسی جلو و عقب را کامل کنید.";
+    return "";
   }
+  function nextStep() { const message = validate(step); if (message) { setError(message); return; } setError(""); setStep(s => Math.min(3, s + 1)); }
+  function backStep() { if (picker) { closePicker(); return; } if (step > 1) { setError(""); setStep(s => s - 1); } else router.back(); }
 
-  async function loadTrims(selectedModelId: string) {
-    const trims = await getVehicleTrimsByModel(supabase, selectedModelId);
-    setVehicleTrims(trims as VehicleTrim[]); return trims as VehicleTrim[];
-  }
-
-  async function handleBrandChange(value: string) {
-    const selected = initialData.brands.find((item) => item.id === value);
-    setBrandId(value); setBrand(selected?.name_fa ?? ""); setModelId(""); setModel(""); setTrim(""); setVehicleModels([]); setVehicleTrims([]);
-    if (!value) return;
-    try { await loadModels(value); } catch (err) { setError(err instanceof Error ? err.message : "دریافت مدل‌ها ناموفق بود."); }
-  }
-
-  async function handleModelChange(value: string) {
-    const selected = vehicleModels.find((item) => item.id === value);
-    setModelId(value); setModel(selected?.name_fa ?? ""); setTrim(""); setVehicleTrims([]);
-    if (!value) return;
-    try { await loadTrims(value); } catch (err) { setError(err instanceof Error ? err.message : "دریافت تیپ‌ها ناموفق بود."); }
-  }
-
-  function handleTrimChange(value: string) {
-    const selected = vehicleTrims.find((item) => item.id === value);
-    setTrim(selected?.name_fa ?? "");
-  }
-
-  async function handleCatalogSearchSelect(selection: VehicleCatalogSelection) {
-    setBrandId(selection.brandId); setBrand(selection.brandName); setModelId(""); setModel(""); setTrim(""); setVehicleModels([]); setVehicleTrims([]);
-    try {
-      const models = await loadModels(selection.brandId);
-      if (!selection.modelId) return;
-      const selectedModel = models.find((item) => item.id === selection.modelId);
-      if (!selectedModel) return;
-      setModelId(selectedModel.id); setModel(selectedModel.name_fa);
-      const trims = await loadTrims(selectedModel.id);
-      if (!selection.trimId) return;
-      const selectedTrim = trims.find((item) => item.id === selection.trimId);
-      if (selectedTrim) setTrim(selectedTrim.name_fa);
-    } catch (err) { setError(err instanceof Error ? err.message : "انتخاب خودرو از کاتالوگ ناموفق بود."); }
-  }
-
-  async function checkVehicleDuplicates() {
-    if (!vehicle?.dealership_id || !brand.trim() || !model.trim()) { setDuplicateVehicles([]); return; }
-    setDuplicateChecking(true);
-    const result = await checkVehicleDuplicateAction({ dealershipId: vehicle.dealership_id, brand: brand.trim(), model: model.trim(), trim: trim.trim() || null, modelYear: modelYear ? Number(modelYear) : null, mileage: mileage ? Number(mileage) : null, color: color.trim() || null, excludeVehicleId: id });
-    setDuplicateVehicles(result.ok ? result.data as DuplicateVehicle[] : []);
-    if (!result.ok) setError(result.error);
-    setDuplicateChecking(false);
-  }
-
-  useEffect(() => {
-    if (!vehicle?.dealership_id) return;
-    const signature = JSON.stringify([vehicle.dealership_id, brand, model, trim, modelYear, mileage, color]);
-    if (signature === initialDuplicateSignature.current) return;
-    const timer = window.setTimeout(checkVehicleDuplicates, 600);
-    return () => window.clearTimeout(timer);
-  }, [vehicle?.dealership_id, brand, model, trim, modelYear, mileage, color]);
-
-  function handleNewImages(files: FileList | null) {
-    if (!files) return;
-    const selected = Array.from(files);
-    const remaining = MAX_VEHICLE_IMAGES - images.length - newImages.length;
-    if (remaining <= 0) { setError("حداکثر ۱۰ تصویر برای هر خودرو مجاز است."); return; }
-    const filesToAdd = selected.slice(0, remaining);
-    const invalid = filesToAdd.find((file) => !file.type.startsWith("image/"));
-    if (invalid) { setError("فقط فایل‌های تصویری قابل انتخاب هستند."); return; }
-    const oversized = filesToAdd.find((file) => file.size > MAX_IMAGE_SIZE);
-    if (oversized) { setError(`حجم فایل "${oversized.name}" بیشتر از ۱۰ مگابایت است.`); return; }
-    setError(""); setNewImages((current) => [...current, ...filesToAdd]);
-  }
-
-  function getImageUrl(path: string) { return supabase.storage.from("vehicle-images").getPublicUrl(path).data.publicUrl; }
-
-  async function deleteExistingImage(image: VehicleImage) {
-    if (!window.confirm("آیا مطمئنی می‌خواهی این تصویر حذف شود؟")) return;
-    setDeletingImageId(image.id); setError("");
-    const result = await deleteVehicleImageAction(image.id, id);
-    if (!result.ok) { setError(`حذف تصویر ناموفق بود: ${result.error}`); setDeletingImageId(null); return; }
-    setImages((current) => current.filter((item) => item.id !== image.id));
-    setDeletingImageId(null);
-  }
-
-  async function updateVehicle(e: React.FormEvent) {
-    e.preventDefault();
-    if (!vehicle) return;
-    if (!brand.trim() || !model.trim()) { setError("برند و مدل خودرو الزامی است."); return; }
-    const yearValue = modelYear.trim() ? Number(modelYear) : null;
-    const mileageValue = mileage.trim() ? Number(mileage) : null;
-    const priceValue = price.trim() ? Number(price) : null;
-    if (yearValue !== null && (!Number.isInteger(yearValue) || yearValue < 1300 || yearValue > 1405)) { setError("سال مدل باید بین ۱۳۰۰ تا ۱۴۰۵ باشد."); return; }
-    if (mileageValue !== null && (!Number.isInteger(mileageValue) || mileageValue < 0)) { setError("کارکرد باید یک عدد صحیح بزرگ‌تر یا مساوی صفر باشد."); return; }
-    if (priceValue !== null && (!Number.isInteger(priceValue) || priceValue < 0)) { setError("قیمت باید یک عدد صحیح بزرگ‌تر یا مساوی صفر باشد."); return; }
-    if (status !== "available" && status !== "sold") { setError("وضعیت خودرو نامعتبر است."); return; }
-
-    const selectedTrim = vehicleTrims.find((item) => item.name_fa.trim() === trim.trim());
+  async function saveVehicle(e: React.FormEvent) {
+    e.preventDefault(); const message = validate(3) || validate(2) || validate(1); if (message || !vehicle) { setError(message || "خودرو پیدا نشد."); return; }
     setSaving(true); setError("");
-
-    const vehicleResult = await updateEditableVehicleAction({
-      vehicleId: id, brand, model, trim: trim.trim() || null, modelYear: yearValue, mileage: mileageValue,
-      color: color.trim() || null, price: priceValue, description, status,
-      transmission: selectedTrim?.transmission ?? vehicle.transmission,
-      fuelType: selectedTrim?.fuel_type ?? vehicle.fuel_type,
-    });
-    if (!vehicleResult.ok) { setError(vehicleResult.error); setSaving(false); return; }
-
-    const inspectionResult = await replaceVehicleBodyInspectionAction(id, bodyInspection.map((item) => ({ partCode: item.part_code, condition: item.condition, paintThicknessMicrons: item.paint_thickness_microns, notes: item.notes })));
-    if (!inspectionResult.ok) { setError(`ذخیره کارشناسی بدنه ناموفق بود: ${inspectionResult.error}`); setSaving(false); return; }
-
-    if (newImages.length > 0) {
-      const available = MAX_VEHICLE_IMAGES - images.length;
-      if (newImages.length > available) { setError("حداکثر ۱۰ تصویر برای هر خودرو مجاز است."); setSaving(false); return; }
-      const maxSortOrder = images.reduce((max, image) => Math.max(max, image.sort_order), -1);
-      const uploadedPaths: string[] = [];
-      const imageRows: { storagePath: string; thumbnailPath: string; sortOrder: number }[] = [];
-      try {
-        for (let i = 0; i < newImages.length; i++) {
-          const sourceFile = newImages[i];
-          const processed = await processVehicleImage(sourceFile);
-          const fileId = crypto.randomUUID();
-          const storagePath = `${id}/gallery/${fileId}.webp`;
-          const thumbnailPath = `${id}/gallery/thumb/${fileId}.webp`;
-          const mainUpload = await supabase.storage.from("vehicle-images").upload(storagePath, processed.mainFile, { cacheControl: "31536000", upsert: false, contentType: "image/webp" });
-          if (mainUpload.error) throw new Error(`آپلود تصویر "${sourceFile.name}" ناموفق بود: ${mainUpload.error.message}`);
-          uploadedPaths.push(storagePath);
-          const thumbUpload = await supabase.storage.from("vehicle-images").upload(thumbnailPath, processed.thumbnailFile, { cacheControl: "31536000", upsert: false, contentType: "image/webp" });
-          if (thumbUpload.error) throw new Error(`آپلود thumbnail تصویر "${sourceFile.name}" ناموفق بود: ${thumbUpload.error.message}`);
-          uploadedPaths.push(thumbnailPath);
-          imageRows.push({ storagePath, thumbnailPath, sortOrder: maxSortOrder + i + 1 });
-        }
-        const rowsResult = await createVehicleImageRowsAction(id, imageRows);
-        if (!rowsResult.ok) throw new Error(`ثبت اطلاعات تصاویر ناموفق بود: ${rowsResult.error}`);
-        setImages((current) => [...current, ...imageRows.map((row, index) => ({ id: `new-${Date.now()}-${index}`, storage_path: row.storagePath, thumbnail_path: row.thumbnailPath, sort_order: row.sortOrder }))].sort((a, b) => a.sort_order - b.sort_order));
-        setNewImages([]);
-      } catch (imageError) {
-        if (uploadedPaths.length) await supabase.storage.from("vehicle-images").remove(uploadedPaths);
-        setError(imageError instanceof Error ? imageError.message : "پردازش یا آپلود تصویر ناموفق بود.");
-        setSaving(false); return;
-      }
+    const selectedTrim = trims.find(item => item.name_fa.trim() === trim.trim());
+    const result = await updateEditableVehicleAction({ vehicleId: id, brand, model, trim: trim.trim() || null, modelYear: Number(modelYear), mileage: Number(mileage), color: color.trim() || null, price: Number(price), description, status: vehicle.status === "sold" ? "sold" : "available", transmission: gearboxType || selectedTrim?.transmission || null, fuelType: fuelType || selectedTrim?.fuel_type || null, chassisCondition: JSON.stringify({ front: frontChassisCondition, rear: rearChassisCondition }), engineCondition: engineCondition || null, insuranceExpiryDate: insuranceDeadline || null, gearboxCondition: gearboxCondition || null });
+    if (!result.ok) { setError(result.error); setSaving(false); return; }
+    const inspection = await replaceVehicleBodyInspectionAction(id, bodyInspection.map(item => ({ partCode: item.part_code, condition: item.condition, paintThicknessMicrons: item.paint_thickness_microns, notes: item.notes }))); if (!inspection.ok) { setError(`ذخیره کارشناسی بدنه ناموفق بود: ${inspection.error}`); setSaving(false); return; }
+    if (newImages.length) {
+      const maxSort = existingImages.reduce((max, item) => Math.max(max, item.sort_order), -1); const rows: { storagePath: string; thumbnailPath: string; sortOrder: number }[] = []; const uploaded: string[] = [];
+      try { for (let i = 0; i < newImages.length; i++) { const processed = await processVehicleImage(newImages[i]); const fileId = crypto.randomUUID(); const storagePath = `${id}/gallery/${fileId}.webp`; const thumbnailPath = `${id}/gallery/thumb/${fileId}.webp`; const main = await supabase.storage.from("vehicle-images").upload(storagePath, processed.mainFile, { cacheControl: "31536000", upsert: false, contentType: "image/webp" }); if (main.error) throw new Error(main.error.message); uploaded.push(storagePath); const thumb = await supabase.storage.from("vehicle-images").upload(thumbnailPath, processed.thumbnailFile, { cacheControl: "31536000", upsert: false, contentType: "image/webp" }); if (thumb.error) throw new Error(thumb.error.message); uploaded.push(thumbnailPath); rows.push({ storagePath, thumbnailPath, sortOrder: maxSort + i + 1 }); } const rowsResult = await createVehicleImageRowsAction(id, rows); if (!rowsResult.ok) throw new Error(rowsResult.error); }
+      catch (uploadError) { if (uploaded.length) await supabase.storage.from("vehicle-images").remove(uploaded); setError(uploadError instanceof Error ? uploadError.message : "پردازش یا آپلود تصویر ناموفق بود."); setSaving(false); return; }
     }
     router.push(`/vehicles/${id}`);
   }
 
-  if (!vehicle) return <AdminLayout title="ویرایش خودرو" description="ویرایش اطلاعات خودرو"><div className="rounded-2xl bg-white p-8 shadow-sm">خودرو پیدا نشد.</div></AdminLayout>;
+  const filteredBrands = initialData.brands.filter(x => `${x.name_fa} ${x.name_en ?? ""}`.toLowerCase().includes(pickerSearch.toLowerCase()));
+  const filteredModels = models.filter(x => `${x.name_fa} ${x.name_en ?? ""}`.toLowerCase().includes(pickerSearch.toLowerCase()));
+  const filteredTrims = trims.filter(x => `${x.name_fa} ${x.name_en ?? ""}`.toLowerCase().includes(pickerSearch.toLowerCase()));
+  if (!vehicle) return <main dir="rtl" className="min-h-screen bg-gray-100 p-6 text-center">خودرو پیدا نشد.</main>;
 
-  return (
-    <AdminLayout title="ویرایش خودرو" description="ویرایش اطلاعات خودرو در خودرو‌یاب" adminUserFullName={initialData.profile?.full_name?.trim() || "مدیر سیستم"}>
-      <div className="mx-auto max-w-5xl space-y-6">
-        <button type="button" onClick={() => router.push(`/vehicles/${id}`)} className="rounded-xl bg-white px-5 py-3 text-sm font-medium text-gray-700 shadow-sm hover:bg-gray-50">بازگشت به جزئیات خودرو</button>
-        {error && <div className="rounded-xl border border-red-100 bg-red-50 p-4 text-sm text-red-700">{error}</div>}
-        <form onSubmit={updateVehicle} className="space-y-6">
-          {duplicateChecking && <div className="rounded-2xl border border-slate-200 bg-slate-50 p-4 text-sm text-slate-600">در حال بررسی خودروهای مشابه...</div>}
-          {!duplicateChecking && duplicateVehicles.length > 0 && <div className="rounded-2xl border border-amber-200 bg-amber-50 p-5"><h3 className="font-extrabold text-amber-950">خودروی بسیار مشابه پیدا شد</h3><p className="mt-1 text-sm text-amber-800">یک یا چند خودرو با مشخصات مشابه قبلاً در این نمایشگاه ثبت شده‌اند.</p><div className="mt-4 space-y-2">{duplicateVehicles.map((item) => <div key={item.vehicle_id} className="rounded-xl border border-amber-200 bg-white p-3"><div className="font-bold">{item.brand} {item.model}{item.trim_name ? ` · ${item.trim_name}` : ""}</div><div className="mt-2 text-xs text-slate-500">تطابق {item.similarity_score}٪</div></div>)}</div></div>}
-
-          <section className="rounded-2xl border border-slate-200 bg-white p-6 shadow-sm"><h2 className="mb-6 text-xl font-bold">اطلاعات خودرو</h2><VehicleCatalogSearch label="جستجوی سریع خودرو" placeholder="مثلاً پژو 207 MC، Toyota Corolla..." initialQuery={[brand, model, trim].filter(Boolean).join(" ")} onSelect={handleCatalogSearchSelect} initialCatalog={{ brands: initialData.brands, models: vehicleModels, trims: vehicleTrims }} /><div className="mt-5 grid gap-4 md:grid-cols-2">
-            <label className="text-sm text-gray-600">برند *<select required value={brandId} onChange={(e) => handleBrandChange(e.target.value)} className="mt-2 w-full rounded-xl border border-gray-200 bg-white px-4 py-3"><option value="">انتخاب برند</option>{initialData.brands.map((item) => <option key={item.id} value={item.id}>{item.name_fa}</option>)}</select></label>
-            <label className="text-sm text-gray-600">مدل *<select required value={modelId} onChange={(e) => handleModelChange(e.target.value)} disabled={!brandId} className="mt-2 w-full rounded-xl border border-gray-200 bg-white px-4 py-3 disabled:bg-gray-100"><option value="">انتخاب مدل</option>{vehicleModels.map((item) => <option key={item.id} value={item.id}>{item.name_fa}</option>)}</select></label>
-            <label className="text-sm text-gray-600">تیپ<select value={vehicleTrims.find((item) => item.name_fa === trim)?.id ?? ""} onChange={(e) => handleTrimChange(e.target.value)} disabled={!modelId} className="mt-2 w-full rounded-xl border border-gray-200 bg-white px-4 py-3 disabled:bg-gray-100"><option value="">انتخاب تیپ</option>{vehicleTrims.map((item) => <option key={item.id} value={item.id}>{item.name_fa}</option>)}</select></label>
-            <label className="text-sm text-gray-600">سال مدل<select value={modelYear} onChange={(e) => setModelYear(e.target.value)} className="mt-2 w-full rounded-xl border border-gray-200 bg-white px-4 py-3"><option value="">انتخاب سال</option>{Array.from({ length: 106 }, (_, index) => 1405 - index).map((year) => <option key={year} value={year}>{year.toLocaleString("fa-IR", { useGrouping: false })} — {(year + 621).toLocaleString("fa-IR", { useGrouping: false })}</option>)}</select></label>
-            <label className="text-sm text-gray-600">کارکرد (کیلومتر)<input value={mileage} onChange={(e) => setMileage(normalizeDigits(e.target.value))} inputMode="numeric" className="mt-2 w-full rounded-xl border border-gray-200 px-4 py-3" /></label>
-            <label className="text-sm text-gray-600">رنگ<input value={color} onChange={(e) => setColor(e.target.value)} className="mt-2 w-full rounded-xl border border-gray-200 px-4 py-3" /></label>
-            <label className="text-sm text-gray-600">قیمت (تومان)<input value={price} onChange={(e) => setPrice(normalizeDigits(e.target.value))} inputMode="numeric" className="mt-2 w-full rounded-xl border border-gray-200 px-4 py-3" /></label>
-            <label className="text-sm text-gray-600">وضعیت<select value={status} onChange={(e) => setStatus(e.target.value)} className="mt-2 w-full rounded-xl border border-gray-200 bg-white px-4 py-3"><option value="available">موجود</option><option value="sold">فروخته شده</option></select></label>
-          </div><label className="mt-4 block text-sm text-gray-600">توضیحات<textarea value={description} onChange={(e) => setDescription(e.target.value)} rows={5} className="mt-2 w-full rounded-xl border border-gray-200 px-4 py-3" /></label></section>
-
-          <section>{bodyParts.length === 0 ? <div className="rounded-2xl border border-red-100 bg-red-50 p-6 text-sm text-red-700">قطعات کارشناسی بدنه در سیستم پیدا نشدند.</div> : <VehicleBodyInspection parts={bodyParts} value={bodyInspection} onChange={setBodyInspection} />}</section>
-
-          <section className="rounded-2xl border border-slate-200 bg-white p-6 shadow-sm"><h2 className="text-xl font-extrabold">تصاویر خودرو</h2><p className="mt-1 text-sm text-slate-500">تصاویر فعلی را حذف یا تصاویر جدید اضافه کن.</p>{images.length > 0 ? <div className="mt-5 grid grid-cols-2 gap-4 sm:grid-cols-3 lg:grid-cols-4">{images.map((image) => <div key={image.id} className="relative overflow-hidden rounded-2xl border border-slate-200 bg-slate-100"><div className="aspect-[4/3]"><img src={getImageUrl(image.storage_path)} alt={`${brand} ${model}`} className="h-full w-full object-cover" /></div><button type="button" onClick={() => deleteExistingImage(image)} disabled={deletingImageId === image.id} className="absolute right-2 top-2 rounded-xl bg-red-600 px-3 py-2 text-xs font-bold text-white disabled:opacity-60">{deletingImageId === image.id ? "در حال حذف..." : "حذف"}</button></div>)}</div> : <div className="mt-5 rounded-2xl border border-dashed border-slate-200 bg-slate-50 p-10 text-center text-sm text-slate-500">هنوز تصویری ثبت نشده است.</div>}<div className="mt-6 rounded-2xl border border-blue-100 bg-blue-50/60 p-5"><label className="block"><span className="text-sm font-bold">افزودن تصاویر جدید</span><span className="mt-1 block text-xs text-slate-500">حداکثر ۱۰ مگابایت برای هر تصویر</span><input type="file" accept="image/*" multiple onChange={(e) => { handleNewImages(e.target.files); e.currentTarget.value = ""; }} className="mt-4 block w-full rounded-xl border border-blue-200 bg-white px-4 py-3 text-sm" /></label>{newImages.length > 0 && <div className="mt-4 space-y-2">{newImages.map((file, index) => <div key={`${file.name}-${index}`} className="flex items-center justify-between rounded-xl bg-white px-4 py-3"><span className="truncate text-sm">{file.name}</span><button type="button" onClick={() => setNewImages((current) => current.filter((_, i) => i !== index))} className="text-xs font-bold text-red-600">حذف</button></div>)}</div>}</div></section>
-
-          <div className="flex justify-end gap-3"><button type="button" onClick={() => router.push(`/vehicles/${id}`)} className="rounded-xl border border-gray-200 bg-white px-6 py-3 text-sm font-medium">انصراف</button><button type="submit" disabled={saving} className="rounded-xl bg-blue-600 px-8 py-3 text-sm font-bold text-white disabled:opacity-50">{saving ? "در حال ذخیره..." : "ذخیره تغییرات"}</button></div>
-        </form>
-      </div>
-    </AdminLayout>
-  );
+  return <main dir="rtl" className="min-h-screen bg-gray-100 text-gray-900">
+    <header className="border-b border-gray-100 bg-white"><div className="mx-auto max-w-xl px-4 pt-4"><div className="relative flex h-11 items-center justify-center"><button type="button" onClick={() => { setStep(1); setPicker(null); setError(""); }} className="absolute left-0 rounded-lg px-2 py-1.5 text-[13px] font-semibold text-gray-500">پاک کردن</button><h1 className="text-[18px] font-extrabold text-gray-950">ویرایش خودرو</h1><button type="button" aria-label="مرحله قبل" onClick={backStep} className="absolute right-0 flex h-9 w-9 items-center justify-center rounded-full text-gray-700"><KhodroyabChevronIcon className="h-5 w-5" /></button></div><div className="mt-2 flex w-full gap-1.5">{[1,2,3].map(s => <span key={s} className={`h-1.5 flex-1 rounded-full ${step >= s ? "bg-emerald-500" : "bg-gray-200"}`} />)}</div></div></header>
+    <div className="mx-auto max-w-xl px-4 py-6"><div className="mb-6 text-center"><p className="text-[12px] font-medium text-gray-500">{`صفحه ${step.toLocaleString("fa-IR")} از ۳`}</p><h2 className="mt-1 text-[17px] font-bold text-gray-900">{step === 1 ? "تصاویر و توضیحات" : step === 2 ? "مشخصات خودرو" : "تکمیل آگهی"}</h2></div>
+      {error && <div className="mb-6 rounded-xl bg-red-50 p-4 text-sm text-red-700">{error}</div>}
+      <form onSubmit={e => { e.preventDefault(); if (step < 3) nextStep(); else saveVehicle(e); }} className="space-y-6"><section className="overflow-hidden rounded-2xl bg-white shadow-sm ring-1 ring-gray-100"><div className="divide-y divide-gray-100">
+        {step === 1 && <><div className="px-4 py-5"><div className="mb-4 flex items-center justify-between"><span className="text-[14px] font-bold">عکس آگهی <span className="text-red-500">*</span></span><span className="text-[11px] text-gray-400">حداقل یک عکس</span></div><div className="flex items-start gap-2 overflow-x-auto pb-1"><button type="button" onClick={() => setImageSheetOpen(true)} className="flex h-20 w-20 shrink-0 flex-col items-center justify-center rounded-xl border border-dashed border-gray-300 bg-gray-50 text-gray-600"><span className="text-2xl">＋</span><span className="text-[10px] font-semibold">افزودن عکس</span></button>{existingImages.map(image => <div key={image.id} className="relative h-20 w-20 shrink-0 overflow-hidden rounded-xl bg-gray-100"><img src={imageUrl(image.storage_path)} alt="عکس خودرو" className="h-full w-full object-cover"/><button type="button" onClick={() => deleteExistingImage(image)} disabled={deletingImageId === image.id} className="absolute right-1 top-1 flex h-6 w-6 items-center justify-center rounded-full bg-black/60 text-white">×</button></div>)}{newImagePreviews.map(({ index, url }) => <div key={`${url}-${index}`} className="relative h-20 w-20 shrink-0 overflow-hidden rounded-xl bg-gray-100"><img src={url} alt={`عکس ${index + 1}`} className="h-full w-full object-cover"/><button type="button" onClick={() => setNewImages(current => current.filter((_, i) => i !== index))} className="absolute right-1 top-1 flex h-6 w-6 items-center justify-center rounded-full bg-black/60 text-white">×</button></div>)}</div></div><input ref={cameraInputRef} type="file" accept="image/*" capture="environment" className="hidden" onChange={e => handleNewImages(e.target.files)}/><input ref={galleryInputRef} type="file" accept="image/*" multiple className="hidden" onChange={e => handleNewImages(e.target.files)}/><button type="button" onClick={() => openPicker("vehicle")} className="flex min-h-[64px] w-full items-center justify-between px-4 text-right"><span className="text-[14px] font-semibold text-gray-700">برند و مدل <span className="text-red-500">*</span></span><span className={`flex items-center gap-2 text-[14px] font-bold ${brand && model ? "text-red-600" : "text-gray-400"}`}>{brand && model ? `${brand} ${model}` : "انتخاب"}<span>‹</span></span></button></>}
+        {step === 2 && <>{[["mileage","کارکرد (کیلومتر)",mileage ? `${formatPersianInteger(mileage)} کیلومتر` : "انتخاب"],["fuel","نوع سوخت",fuelType || "انتخاب"],["year","مدل (سال تولید)",modelYear ? Number(modelYear).toLocaleString("fa-IR",{useGrouping:false}) : "انتخاب"],["color","رنگ",color || "انتخاب"],["price","قیمت خودرو (تومان)",price ? `${formatPersianInteger(price)} تومان` : "انتخاب"]].map(([key,label,value]) => <button key={key} type="button" onClick={() => openPicker(key as Picker)} className="flex min-h-[64px] w-full items-center justify-between px-4 text-right"><span className="text-[14px] font-semibold text-gray-700">{label} <span className="text-red-500">*</span></span><span className={`flex items-center gap-2 text-[14px] font-bold ${value !== "انتخاب" ? "text-red-600" : "text-gray-400"}`}>{value}<span>‹</span></span></button>)}</>}
+        {step === 3 && <><div className="space-y-2 px-4 py-3"><div className="text-[14px] font-semibold text-gray-700">وضعیت شاسی <span className="text-red-500">*</span></div><div className="grid grid-cols-2 gap-2"><button type="button" onClick={() => { setChassisTarget("front"); openPicker("chassis"); }} className={`flex min-h-[60px] items-center justify-between rounded-xl border px-3 text-right text-[13px] font-bold ${frontChassisCondition ? "border-red-200 bg-red-50 text-red-700" : "border-gray-200 bg-white text-gray-500"}`}><span>شاسی جلو</span><span>{frontChassisCondition || "انتخاب"}</span></button><button type="button" onClick={() => { setChassisTarget("rear"); openPicker("chassis"); }} className={`flex min-h-[60px] items-center justify-between rounded-xl border px-3 text-right text-[13px] font-bold ${rearChassisCondition ? "border-red-200 bg-red-50 text-red-700" : "border-gray-200 bg-white text-gray-500"}`}><span>شاسی عقب</span><span>{rearChassisCondition || "انتخاب"}</span></button></div></div><div className="my-4"><VehicleBodyInspection parts={bodyParts} value={bodyInspection} onChange={setBodyInspection}/></div>{[["engine","وضعیت موتور",engineCondition],["insurance","مهلت بیمه شخص ثالث",insuranceDeadline ? new Intl.DateTimeFormat("fa-IR").format(new Date(`${insuranceDeadline}T00:00:00`)) : "انتخاب"],["gearboxType","نوع گیربکس",gearboxType],["gearboxCondition","وضعیت گیربکس",gearboxCondition]].map(([key,label,value]) => <button key={key} type="button" onClick={() => openPicker(key as Picker)} className="flex min-h-[64px] w-full items-center justify-between px-4 text-right"><span className="text-[14px] font-semibold text-gray-700">{label}</span><span className={`flex items-center gap-2 text-[14px] font-bold ${value && value !== "انتخاب" ? "text-red-600" : "text-gray-400"}`}>{value || "انتخاب"}<span>‹</span></span></button>)}<section className="box-border w-full rounded-2xl bg-white p-4"><label className="mb-2 block text-[13px] font-semibold text-gray-700">توضیحات</label><textarea value={description} onChange={e => setDescription(e.target.value)} rows={4} className="box-border block min-h-[110px] w-full resize-none rounded-xl border border-gray-200 bg-white px-3 py-3 text-[16px] leading-7 outline-none" placeholder="توضیحات خودرو..."/></section></>}
+      </div></section><div className="flex gap-2"><button type="button" onClick={backStep} className="flex-1 rounded-xl border border-gray-200 bg-white py-3.5 text-sm font-bold text-gray-700">{step === 1 ? "انصراف" : "مرحله قبل"}</button><button type="submit" disabled={saving} className="flex-[2] rounded-xl bg-emerald-600 py-3.5 text-sm font-extrabold text-white disabled:opacity-50">{saving ? "در حال ذخیره..." : step < 3 ? "ادامه" : "ذخیره تغییرات"}</button></div></form>
+    </div>
+    {imageSheetOpen && <div className="fixed inset-0 z-[70] flex items-end bg-black/40" onClick={() => setImageSheetOpen(false)}><div className="w-full rounded-t-3xl bg-white p-5" dir="rtl" onClick={e => e.stopPropagation()}><div className="mx-auto mb-5 h-1 w-10 rounded-full bg-gray-200"/><button type="button" onClick={() => { setImageSheetOpen(false); cameraInputRef.current?.click(); }} className="flex w-full items-center justify-between border-b border-gray-100 py-4 font-bold">گرفتن عکس با دوربین<span>›</span></button><button type="button" onClick={() => { setImageSheetOpen(false); galleryInputRef.current?.click(); }} className="flex w-full items-center justify-between py-4 font-bold">انتخاب از گالری<span>›</span></button></div></div>}
+    {picker && <div className="fixed inset-0 z-[80] bg-white" dir="rtl"><div className="flex h-full flex-col"><header className="flex h-16 shrink-0 items-center justify-between border-b border-gray-100 px-4"><button type="button" onClick={closePicker} className="flex h-9 w-9 items-center justify-center text-gray-600"><KhodroyabChevronIcon className="h-5 w-5"/></button><h2 className="text-[17px] font-extrabold">{picker === "vehicle" ? "انتخاب برند و مدل" : picker === "mileage" ? "کارکرد" : picker === "fuel" ? "انتخاب نوع سوخت" : picker === "year" ? "انتخاب سال تولید" : picker === "color" ? "انتخاب رنگ" : picker === "price" ? "قیمت خودرو" : picker === "chassis" ? "وضعیت شاسی" : picker === "engine" ? "وضعیت موتور" : picker === "insurance" ? "مهلت بیمه شخص ثالث" : picker === "gearboxType" ? "نوع گیربکس" : "وضعیت گیربکس"}</h2><div className="w-9"/></header>{!["mileage","price","insurance"].includes(picker) && <div className="border-b border-gray-100 p-4"><input value={pickerSearch} onChange={e => setPickerSearch(e.target.value)} placeholder="جستجو" className="h-11 w-full rounded-xl bg-gray-100 px-3 text-[14px] outline-none"/></div>}<div className="flex-1 overflow-y-auto p-4">
+      {picker === "vehicle" && (!brandId ? filteredBrands.map(item => <button key={item.id} type="button" onClick={() => selectBrand(item)} className="flex min-h-[56px] w-full items-center justify-between border-b border-gray-100 px-2 text-right text-[14px] font-semibold">{item.name_fa}<span>‹</span></button>) : !modelId ? <><button type="button" onClick={() => { setBrandId(""); setBrand(""); setModels([]); }} className="mb-3 text-[13px] font-semibold text-gray-500">تغییر برند</button>{filteredModels.map(item => <button key={item.id} type="button" onClick={() => selectModel(item)} className="flex min-h-[56px] w-full items-center justify-between border-b border-gray-100 px-2 text-right text-[14px] font-semibold">{item.name_fa}<span>‹</span></button>)}</> : <><button type="button" onClick={() => { setModelId(""); setModel(""); setTrims([]); }} className="mb-3 text-[13px] font-semibold text-gray-500">تغییر مدل</button>{filteredTrims.length === 0 ? <button type="button" onClick={closePicker} className="flex min-h-[56px] w-full border-b border-gray-100 px-2 text-right font-semibold">بدون انتخاب تیپ</button> : filteredTrims.map(item => <button key={item.id} type="button" onClick={() => selectTrim(item)} className={`flex min-h-[56px] w-full items-center justify-between border-b border-gray-100 px-2 text-right font-semibold ${trim === item.name_fa ? "text-red-600" : "text-gray-900"}`}>{item.name_fa}<span>‹</span></button>)}</>}
+      {picker === "mileage" && <div className="space-y-4"><input autoFocus inputMode="numeric" value={mileage} onChange={e => setMileage(normalizeDigits(e.target.value))} className="h-14 w-full rounded-xl border border-gray-200 px-4 text-center text-xl outline-none" placeholder="مثلاً ۵۰۰۰۰"/><button type="button" onClick={closePicker} className="w-full rounded-xl bg-emerald-600 py-4 font-bold text-white">تأیید {mileage ? `${formatPersianInteger(mileage)} کیلومتر` : ""}</button></div>}
+      {picker === "price" && <div className="space-y-4"><input autoFocus inputMode="numeric" value={price} onChange={e => setPrice(normalizeDigits(e.target.value))} className="h-14 w-full rounded-xl border border-gray-200 px-4 text-center text-xl outline-none" placeholder="مثلاً ۱۵۰۰۰۰۰۰۰۰"/><button type="button" onClick={closePicker} className="w-full rounded-xl bg-emerald-600 py-4 font-bold text-white">تأیید {price ? `${formatPersianInteger(price)} تومان` : ""}</button></div>}
+      {picker === "fuel" && FUEL_OPTIONS.filter(x => x.includes(pickerSearch)).map(x => <button key={x} type="button" onClick={() => { setFuelType(x); closePicker(); }} className={`flex min-h-[56px] w-full items-center justify-between border-b border-gray-100 px-2 font-semibold ${fuelType === x ? "text-red-600" : ""}`}>{x}<span>‹</span></button>)}
+      {picker === "year" && YEARS.map(y => <button key={y} type="button" onClick={() => { setModelYear(String(y)); closePicker(); }} className={`mb-2 flex min-h-[54px] w-full items-center justify-center rounded-xl border font-bold ${modelYear === String(y) ? "border-red-500 bg-red-50 text-red-600" : "border-gray-200"}`}>{y.toLocaleString("fa-IR",{useGrouping:false})} — {(y+621).toLocaleString("fa-IR",{useGrouping:false})}</button>)}
+      {picker === "color" && COLOR_OPTIONS.filter(x => x.includes(pickerSearch)).map(x => <button key={x} type="button" onClick={() => { setColor(x); closePicker(); }} className={`flex min-h-[56px] w-full items-center justify-between border-b border-gray-100 px-2 font-semibold ${color === x ? "text-red-600" : ""}`}>{x}<span>‹</span></button>)}
+      {picker === "chassis" && CHASSIS_OPTIONS.filter(x => x.includes(pickerSearch)).map(x => <button key={x} type="button" onClick={() => { if (chassisTarget === "front") setFrontChassisCondition(x); else setRearChassisCondition(x); closePicker(); }} className="flex min-h-[56px] w-full items-center justify-between border-b border-gray-100 px-2 font-semibold">{x}<span>‹</span></button>)}
+      {picker === "engine" && ENGINE_OPTIONS.filter(x => x.includes(pickerSearch)).map(x => <button key={x} type="button" onClick={() => { setEngineCondition(x); closePicker(); }} className="flex min-h-[56px] w-full items-center justify-between border-b border-gray-100 px-2 font-semibold">{x}<span>‹</span></button>)}
+      {picker === "insurance" && <div className="space-y-4"><input type="date" value={insuranceDeadline} onChange={e => setInsuranceDeadline(e.target.value)} className="h-14 w-full rounded-xl border border-gray-200 px-4 text-center"/><button type="button" onClick={closePicker} className="w-full rounded-xl bg-emerald-600 py-4 font-bold text-white">تأیید</button></div>}
+      {picker === "gearboxType" && GEARBOX_TYPES.filter(x => x.includes(pickerSearch)).map(x => <button key={x} type="button" onClick={() => { setGearboxType(x); closePicker(); }} className="flex min-h-[56px] w-full items-center justify-between border-b border-gray-100 px-2 font-semibold">{x}<span>‹</span></button>)}
+      {picker === "gearboxCondition" && GEARBOX_OPTIONS.filter(x => x.includes(pickerSearch)).map(x => <button key={x} type="button" onClick={() => { setGearboxCondition(x); closePicker(); }} className="flex min-h-[56px] w-full items-center justify-between border-b border-gray-100 px-2 font-semibold">{x}<span>‹</span></button>)}
+    </div></div></div>}
+  </main>;
 }
+
+function imageUrl(path: string) { return createClient().storage.from("vehicle-images").getPublicUrl(path).data.publicUrl; }
