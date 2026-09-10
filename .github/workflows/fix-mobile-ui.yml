@@ -1,0 +1,37 @@
+name: Fix mobile UI
+on:
+  workflow_dispatch:
+  push:
+    branches: [main]
+jobs:
+  fix:
+    runs-on: ubuntu-latest
+    permissions:
+      contents: write
+    steps:
+      - uses: actions/checkout@v4
+      - name: Apply fixes
+        run: |
+          python3 - <<'PY'
+          from pathlib import Path
+          p = Path('src/app/globals.css')
+          s = p.read_text()
+          s = s.replace('nav.fixed.bottom-0 > div > a > span:first-child > svg {\n  width: 23px !important;\n  height: 23px !important;\n}', 'nav.fixed.bottom-0 > div > a > span:first-child > svg {\n  width: 23px !important;\n  height: 23px !important;\n}\n\nnav.fixed.bottom-0 > div > a > span {\n  display: block !important;\n}\n\nnav.fixed.bottom-0 > div > a > span:last-child {\n  display: block !important;\n  visibility: visible !important;\n  opacity: 1 !important;\n  font-size: 11px !important;\n  line-height: 16px !important;\n  margin-top: 3px !important;\n}')
+          start = s.find('/* Vehicle cards:')
+          if start >= 0:
+              s = s[:start] + '''/* Vehicle cards: enough height for all metadata, including relative time. */\ndiv:has(> div.h-full.w-\\[122px\\]) {\n  min-height: 175px !important;\n  height: 175px !important;\n}\n\n/* Fill the image frame edge-to-edge. */\ndiv:has(> div.h-full.w-\\[122px\\]) img {\n  width: 100% !important;\n  height: 100% !important;\n  object-fit: cover !important;\n}\n'''
+          else:
+              s += '''\n/* Vehicle cards: enough height for all metadata, including relative time. */\ndiv:has(> div.h-full.w-\\[122px\\]) { min-height: 175px !important; height: 175px !important; }\ndiv:has(> div.h-full.w-\\[122px\\]) img { width: 100% !important; height: 100% !important; object-fit: cover !important; }\n'''
+          p.write_text(s)
+          PY
+          git config user.name "github-actions[bot]"
+          git config user.email "41898282+github-actions[bot]@users.noreply.github.com"
+          git add src/app/globals.css
+          git diff --cached --quiet || git commit -m "Fix mobile nav labels card height and image fit"
+          git push
+      - name: Remove workflow
+        if: success()
+        run: |
+          git rm .github/workflows/fix-mobile-ui.yml
+          git commit -m "chore: remove temporary mobile UI workflow [skip ci]"
+          git push
