@@ -1,12 +1,7 @@
 "use client";
 
 import { useMemo, useState } from "react";
-import {
-  CONDITION_LABEL,
-  CONDITION_TEXT,
-  CONDITIONS,
-  conditionFill,
-} from "./vehicleBodyDiagram";
+import { CONDITIONS } from "./vehicleBodyDiagram";
 import VehicleBodyMap from "./VehicleBodyMap";
 
 export type BodyPart = {
@@ -57,8 +52,6 @@ export default function VehicleBodyInspection({ parts, value, onChange }: Props)
     return result;
   }, [value]);
 
-  const selectedInspection = selectedPart ? inspectionMap.get(selectedPart.code) : null;
-
   function getPartStatus(code: string) {
     return inspectionMap.get(code)?.condition || "intact";
   }
@@ -102,7 +95,7 @@ export default function VehicleBodyInspection({ parts, value, onChange }: Props)
           {CONDITIONS.filter((condition) => (summary[condition.value] || 0) > 0).map((condition) => (
             <div key={condition.value} className="rounded-xl border border-slate-200 bg-slate-50 px-3 py-2">
               <div className="text-xl font-extrabold text-slate-900">{summary[condition.value]}</div>
-              <div className={`mt-0.5 text-xs font-bold ${CONDITION_TEXT[condition.value]}`}>
+              <div className="mt-0.5 text-xs font-bold text-slate-600">
                 {condition.label}
               </div>
             </div>
@@ -170,45 +163,17 @@ export default function VehicleBodyInspection({ parts, value, onChange }: Props)
                   })}
                 </div>
 
-                <div className="mt-5">
-                  <label className="mb-2 block text-sm font-bold text-slate-700">
-                    ضخامت رنگ <span className="mr-1 text-xs font-normal text-slate-400">(میکرون)</span>
-                  </label>
-                  <input
-                    type="number"
-                    min="0"
-                    value={selectedInspection?.paint_thickness_microns ?? ""}
-                    onChange={(event) =>
-                      updateInspection(selectedPart.code, {
-                        paint_thickness_microns: event.target.value ? Number(event.target.value) : null,
-                      })
-                    }
-                    className="w-full rounded-xl border border-slate-200 px-4 py-3 outline-none transition focus:border-blue-500"
-                    placeholder="مثلاً ۲۸۰"
-                  />
-                </div>
-
                 <div className="mt-4">
                   <label className="mb-2 block text-sm font-bold text-slate-700">توضیحات کارشناس</label>
                   <textarea
                     rows={4}
-                    value={selectedInspection?.notes || ""}
+                    value={inspectionMap.get(selectedPart.code)?.notes || ""}
                     onChange={(event) =>
                       updateInspection(selectedPart.code, { notes: event.target.value || null })
                     }
                     className="w-full resize-none rounded-xl border border-slate-200 px-4 py-3 outline-none transition focus:border-blue-500"
                     placeholder="مثلاً قسمت پایین گلگیر تعویض شده است..."
                   />
-                </div>
-
-                <div className="mt-5 flex items-center justify-between rounded-xl bg-slate-50 px-4 py-3">
-                  <span className="text-xs text-slate-500">وضعیت فعلی</span>
-                  <span
-                    className="rounded-lg px-3 py-1.5 text-xs font-semibold text-slate-800"
-                    style={{ backgroundColor: conditionFill(getPartStatus(selectedPart.code)) }}
-                  >
-                    {CONDITION_LABEL[getPartStatus(selectedPart.code)] || "سالم"}
-                  </span>
                 </div>
               </div>
 
