@@ -67,10 +67,15 @@ nav.fixed.bottom-0 > div > a.text-gray-950 span {
   color: #dc2626 !important;
 }
 
-/* Vehicle cards: enough height for all metadata, including relative time. */
+/* Vehicle cards: compact height that fits the six metadata rows. */
 div:has(> div.h-full.w-\[122px\]) {
-  min-height: 175px !important;
-  height: 175px !important;
+  min-height: 150px !important;
+  height: 150px !important;
+}
+
+/* Directly override the Tailwind arbitrary-height utility used by the feed cards. */
+article[class*="h-[175px]"] {
+  height: 150px !important;
 }
 
 /* Fill the image frame edge-to-edge. */
