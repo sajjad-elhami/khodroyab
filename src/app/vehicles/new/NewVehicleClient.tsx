@@ -140,7 +140,13 @@ export default function NewVehicleClient({
   const [bodyParts, setBodyParts] = useState<BodyPart[]>(initialData.bodyParts as BodyPart[]);
   const [bodyInspection, setBodyInspection] = useState<Inspection[]>([]);
   const [bodyCondition, setBodyCondition] = useState("");
-  const [chassisCondition, setChassisCondition] = useState("");
+  const [frontChassisCondition, setFrontChassisCondition] = useState("");
+  const [rearChassisCondition, setRearChassisCondition] = useState("");
+  const [chassisTarget, setChassisTarget] = useState<"front" | "rear">("front");
+  const chassisCondition = JSON.stringify({
+    front: frontChassisCondition,
+    rear: rearChassisCondition,
+  });
   const [inspectionLoading, setInspectionLoading] = useState(false);
 
   const [images, setImages] = useState<File[]>([]);
@@ -219,7 +225,8 @@ export default function NewVehicleClient({
     setGearboxType("");
     setGearboxCondition("");
     setBodyCondition("");
-    setChassisCondition("");
+    setFrontChassisCondition("");
+    setRearChassisCondition("");
     setBodyInspection([]);
     setImages([]);
     setError("");
@@ -294,28 +301,8 @@ export default function NewVehicleClient({
     }
 
     if (step === 3) {
-      if (!bodyCondition.trim()) {
-        return "وضعیت بدنه را انتخاب کنید.";
-      }
-
-      if (!chassisCondition.trim()) {
-        return "وضعیت شاسی را انتخاب کنید.";
-      }
-
-      if (!engineCondition.trim()) {
-        return "وضعیت موتور را انتخاب کنید.";
-      }
-
-      if (!insuranceDeadline.trim()) {
-        return "مهلت بیمه شخص ثالث را انتخاب کنید.";
-      }
-
-      if (!gearboxType.trim()) {
-        return "نوع گیربکس را انتخاب کنید.";
-      }
-
-      if (!gearboxCondition.trim()) {
-        return "وضعیت گیربکس را انتخاب کنید.";
+      if (!frontChassisCondition.trim() || !rearChassisCondition.trim()) {
+        return "وضعیت شاسی جلو و عقب را کامل کنید.";
       }
 
       return "";
@@ -324,16 +311,56 @@ export default function NewVehicleClient({
     return "";
   }
 
+  function highlightMissingRegistrationFields() {
+    if (currentStep !== 3) return;
+    const targets = [
+      ["شاسی جلو", !frontChassisCondition.trim()],
+      ["شاسی عقب", !rearChassisCondition.trim()],
+    ] as const;
+    let first: HTMLElement | null = null;
+    for (const [label, missing] of targets) {
+      const node = Array.from(document.querySelectorAll("button")).find((element) => element.textContent?.includes(label)) as HTMLButtonElement | undefined;
+      if (!node) continue;
+      if (missing) {
+        node.classList.add("border-red-400", "bg-red-50", "text-red-700", "ring-2", "ring-red-100");
+        if (!first) first = node;
+      } else {
+        node.classList.remove("border-red-400", "bg-red-50", "text-red-700", "ring-2", "ring-red-100");
+      }
+    }
+    first?.scrollIntoView({ behavior: "smooth", block: "center" });
+  }
+
   function goNextStep() {
     const validationError = validateStep(currentStep);
-
     if (validationError) {
       setError(validationError);
+      requestAnimationFrame(highlightMissingRegistrationFields);
       return;
     }
-
     setError("");
     setCurrentStep((step) => Math.min(step + 1, 3));
+  }
+
+  useEffect(() => {
+    function handleRegistrationBack(event: Event) {
+      event.preventDefault();
+      setError("");
+      setCurrentStep((step) => {
+        if (step <= 1) {
+          window.history.back();
+          return step;
+        }
+        return step - 1;
+      });
+    }
+    window.addEventListener("khodroyab:registration-back", handleRegistrationBack);
+    return () => window.removeEventListener("khodroyab:registration-back", handleRegistrationBack);
+  }, []);
+
+  function openChassisPicker(target: "front" | "rear") {
+    setChassisTarget(target);
+    openPicker("chassis");
   }
 
   useEffect(() => {
@@ -1364,32 +1391,19 @@ export default function NewVehicleClient({
               {currentStep === 3 && (
                 <>
               {/* شاسی */}
-              <button
-                type="button"
-                onClick={() => openPicker("chassis")}
-                className="flex min-h-[64px] w-full items-center justify-between px-4 text-right active:bg-gray-50"
-              >
-                <span className="text-[14px] font-semibold text-gray-700">
+              <div className="space-y-2 px-4 py-3">
+                <div className="text-[14px] font-semibold text-gray-700">
                   وضعیت شاسی <span className="text-red-500">*</span>
-                </span>
-
-                <span
-                  className={`flex items-center gap-2 text-[14px] font-bold ${
-                    chassisCondition ? "text-red-600" : "text-gray-400"
-                  }`}
-                >
-                  {chassisCondition || "انتخاب"}
-                  <svg viewBox="0 0 24 24" fill="none" className="h-4 w-4">
-                    <path
-                      d="M15 5l-7 7 7 7"
-                      stroke="currentColor"
-                      strokeWidth="1.7"
-                      strokeLinecap="round"
-                      strokeLinejoin="round"
-                    />
-                  </svg>
-                </span>
-              </button>
+                </div>
+                <div className="grid grid-cols-2 gap-2">
+                  <button type="button" onClick={() => openChassisPicker("front")} className={`flex min-h-[60px] items-center justify-between rounded-xl border px-3 text-right text-[13px] font-bold transition ${frontChassisCondition ? "border-red-200 bg-red-50 text-red-700" : "border-gray-200 bg-white text-gray-500"}`}>
+                    <span>شاسی جلو</span><span>{frontChassisCondition || "انتخاب"}</span>
+                  </button>
+                  <button type="button" onClick={() => openChassisPicker("rear")} className={`flex min-h-[60px] items-center justify-between rounded-xl border px-3 text-right text-[13px] font-bold transition ${rearChassisCondition ? "border-red-200 bg-red-50 text-red-700" : "border-gray-200 bg-white text-gray-500"}`}>
+                    <span>شاسی عقب</span><span>{rearChassisCondition || "انتخاب"}</span>
+                  </button>
+                </div>
+              </div>
 
               <div className="my-4">
                 <VehicleBodyInspection
@@ -1406,7 +1420,7 @@ export default function NewVehicleClient({
                 className="flex min-h-[64px] w-full items-center justify-between px-4 text-right active:bg-gray-50"
               >
                 <span className="text-[14px] font-semibold text-gray-700">
-                  وضعیت موتور <span className="text-red-500">*</span>
+                  وضعیت موتور
                 </span>
 
                 <span
@@ -1434,7 +1448,7 @@ export default function NewVehicleClient({
                 className="flex min-h-[64px] w-full items-center justify-between px-4 text-right active:bg-gray-50"
               >
                 <span className="text-[14px] font-semibold text-gray-700">
-                  مهلت بیمه شخص ثالث <span className="text-red-500">*</span>
+                  مهلت بیمه شخص ثالث
                 </span>
 
                 <span
@@ -1462,7 +1476,7 @@ export default function NewVehicleClient({
                 className="flex min-h-[64px] w-full items-center justify-between px-4 text-right active:bg-gray-50"
               >
                 <span className="text-[14px] font-semibold text-gray-700">
-                  نوع گیربکس <span className="text-red-500">*</span>
+                  نوع گیربکس
                 </span>
 
                 <span
@@ -1490,7 +1504,7 @@ export default function NewVehicleClient({
                 className="flex min-h-[64px] w-full items-center justify-between px-4 text-right active:bg-gray-50"
               >
                 <span className="text-[14px] font-semibold text-gray-700">
-                  وضعیت گیربکس <span className="text-red-500">*</span>
+                  وضعیت گیربکس
                 </span>
 
                 <span
@@ -2009,7 +2023,11 @@ export default function NewVehicleClient({
                             key={item}
                             type="button"
                             onClick={() => {
-                              setChassisCondition(item);
+                              if (chassisTarget === "front") {
+                                setFrontChassisCondition(item);
+                              } else {
+                                setRearChassisCondition(item);
+                              }
                               setPickerOpen(null);
                             }}
                             className="flex min-h-[56px] w-full border-b border-gray-100 px-2 text-right text-[14px] font-semibold"
