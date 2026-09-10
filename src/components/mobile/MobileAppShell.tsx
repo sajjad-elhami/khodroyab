@@ -36,8 +36,8 @@ const navItems = [
   { href: "/favorites", label: "نشان‌شده", icon: "bookmark" },
   { href: "/vehicles", label: "خودروها", icon: "car" },
   { href: "/vehicles/new", label: "ثبت خودرو", icon: "plus" },
-  { href: "/dealerships", label: "نمایشگاه‌ها", icon: "store" },
-  { href: "/market-analysis", label: "تحلیل بازار", icon: "chart" },
+  { href: "/dealerships", label: "نمایشگاه من", icon: "store" },
+  { href: "/dashboard", label: "داشبورد", icon: "dashboard" },
 ];
 
 function NavIcon({
@@ -99,6 +99,17 @@ function NavIcon({
     );
   }
 
+  if (name === "dashboard") {
+    return (
+      <svg viewBox="0 0 24 24" className={className} aria-hidden="true">
+        <rect {...common} x="4" y="4" width="6" height="6" rx="1.2" />
+        <rect {...common} x="14" y="4" width="6" height="6" rx="1.2" />
+        <rect {...common} x="4" y="14" width="6" height="6" rx="1.2" />
+        <rect {...common} x="14" y="14" width="6" height="6" rx="1.2" />
+      </svg>
+    );
+  }
+
   return (
     <svg viewBox="0 0 24 24" className={className} aria-hidden="true">
       <path {...common} d="M4 17.5 9 12l3.5 3 6.5-7" />
@@ -116,6 +127,7 @@ export default function MobileAppShell({
 }: Props) {
   const pathname = usePathname();
   const isVehicleHeader = Boolean(vehicleHeader);
+  const isDashboard = pathname === "/dashboard";
 
   const [provinceOpen, setProvinceOpen] = useState(false);
   const [locationMode, setLocationMode] = useState<
@@ -451,7 +463,8 @@ export default function MobileAppShell({
       dir="rtl"
       className="min-h-screen bg-[#f6f7f9] text-gray-950"
     >
-      <header className="fixed inset-x-0 top-0 z-40 border-b border-gray-100 bg-white/95 shadow-sm backdrop-blur-xl">
+      {!isDashboard && (
+        <header className="fixed inset-x-0 top-0 z-40 border-b border-gray-100 bg-white/95 shadow-sm backdrop-blur-xl">
         <div className="mx-auto w-full max-w-xl px-4 pb-3 pt-3">
           <div className="flex items-center gap-2">
             <button
@@ -515,9 +528,10 @@ export default function MobileAppShell({
             )}
           </div>
         </div>
-      </header>
+        </header>
+      )}
 
-      <div className="mx-auto w-full max-w-xl px-4 pb-28 pt-[82px]">
+      <div className={`mx-auto w-full max-w-xl px-4 pb-28 ${isDashboard ? "pt-6" : "pt-[82px]"}`}>
         {children}
       </div>
 

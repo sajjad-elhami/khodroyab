@@ -4,7 +4,6 @@ import { useEffect, useMemo, useState } from "react";
 import {
   CONDITION_TEXT,
   CONDITION_LABEL,
-  conditionFill,
 } from "./vehicleBodyDiagram";
 
 export type VehicleBodyMapPart = {
@@ -291,24 +290,6 @@ export default function VehicleBodyMap({
                   return null;
                 }
 
-                const inspection =
-                  inspectionMap.get(
-                    hotspot.code,
-                  );
-
-                const isDamaged =
-                  Boolean(
-                    inspection &&
-                      inspection.condition !==
-                        "intact",
-                  );
-
-                const fill = isDamaged
-                  ? conditionFill(
-                      inspection!.condition,
-                    )
-                  : "transparent";
-
                 return (
                   <button
                     key={hotspot.code}
@@ -333,9 +314,7 @@ export default function VehicleBodyMap({
                           return `${x}% ${y}%`;
                         })
                         .join(", ")})`,
-                      background: isDamaged
-                        ? `${fill}55`
-                        : "transparent",
+                      background: "transparent",
                       border: "none",
                       outline: "none",
                       cursor: readOnly

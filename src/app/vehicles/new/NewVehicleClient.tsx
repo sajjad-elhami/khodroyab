@@ -75,6 +75,33 @@ type Props = {
   initialData: NewVehiclePageData;
 };
 
+function formatPriceUnit(value: string): string {
+  const raw = value.replace(/[^\d]/g, "");
+  if (!raw) return "";
+
+  const amount = Number(raw);
+  if (!Number.isFinite(amount) || amount <= 0) return "";
+
+  const formatFa = (n: number) =>
+    n.toLocaleString("fa-IR", {
+      maximumFractionDigits: 1,
+    });
+
+  if (amount >= 1_000_000_000) {
+    return `${formatFa(amount / 1_000_000_000)} میلیارد تومان`;
+  }
+
+  if (amount >= 1_000_000) {
+    return `${formatFa(amount / 1_000_000)} میلیون تومان`;
+  }
+
+  if (amount >= 1_000) {
+    return `${formatFa(amount / 1_000)} هزار تومان`;
+  }
+
+  return `${formatFa(amount)} تومان`;
+}
+
 export default function NewVehicleClient({
   initialData,
 }: Props) {
@@ -267,10 +294,6 @@ export default function NewVehicleClient({
     }
 
     if (step === 3) {
-      if (!bodyCondition.trim()) {
-        return "وضعیت بدنه را انتخاب کنید.";
-      }
-
       if (!chassisCondition.trim()) {
         return "وضعیت شاسی را انتخاب کنید.";
       }
@@ -689,6 +712,43 @@ export default function NewVehicleClient({
     setSaving(true);
     setError("");
 
+    const bodyConditionPriority = [
+      "stretched",
+      "welded",
+      "damaged",
+      "replaced",
+      "putty",
+      "repaired",
+      "painted",
+      "spot_repair",
+      "unknown",
+    ];
+
+    const bodyConditionLabels: Record<string, string> = {
+      painted: "رنگ‌شده",
+      spot_repair: "لکه‌گیری",
+      putty: "بتونه",
+      replaced: "تعویض‌شده",
+      damaged: "ضربه‌دار",
+      repaired: "تعمیرشده",
+      welded: "جوش‌خورده",
+      stretched: "کشیده‌شده",
+      unknown: "نامشخص",
+    };
+
+    const inspectedConditions = new Set(
+      bodyInspection
+        .map((item) => item.condition)
+        .filter((condition) => condition !== "intact"),
+    );
+
+    const derivedBodyCondition =
+      bodyConditionPriority
+        .map((condition) => bodyConditionLabels[condition])
+        .find((_, index) =>
+          inspectedConditions.has(bodyConditionPriority[index]),
+        ) || "سالم";
+
     const vehicleResult = await createVehicleAction({
       dealershipId,
       brand,
@@ -702,7 +762,7 @@ export default function NewVehicleClient({
       status,
       transmission: gearboxType || selectedTrim?.transmission || null,
       fuelType: fuelType || selectedTrim?.fuel_type || null,
-      bodyCondition: bodyCondition || null,
+      bodyCondition: derivedBodyCondition,
       chassisCondition: chassisCondition || null,
       engineCondition: engineCondition || null,
       insuranceExpiryDate: insuranceDeadline || null,
@@ -762,7 +822,10 @@ export default function NewVehicleClient({
         const sourceFile = images[i];
 
         const processed = await processVehicleImage(sourceFile);
-        const fileId = crypto.randomUUID();
+        const fileId =
+          typeof crypto.randomUUID === "function"
+            ? crypto.randomUUID()
+            : `${Date.now()}-${Math.random().toString(36).slice(2, 10)}`;
 
         const storagePath =
           `${vehicleId}/gallery/${fileId}.webp`;
@@ -906,7 +969,7 @@ export default function NewVehicleClient({
       <div className="mx-auto max-w-5xl px-4 py-6 sm:px-6 sm:py-8">
         <div className="mb-6 text-center">
           <p className="text-[12px] font-medium text-gray-500">
-            {`صفحه ${currentStep} از ۳`}
+            {`صفحه ${currentStep.toLocaleString("fa-IR")} از ۳`}
           </p>
           <h2 className="mt-1 text-[17px] font-bold text-gray-900">
               {currentStep === 1
@@ -943,12 +1006,6 @@ export default function NewVehicleClient({
           }}
           className="space-y-6"
         >
-          {duplicateChecking && (
-            <div className="rounded-2xl border border-slate-200 bg-slate-50 p-4 text-sm text-slate-600">
-              در حال بررسی خودروهای مشابه...
-            </div>
-          )}
-
           {!duplicateChecking && duplicateVehicles.length > 0 && (
             <div className="rounded-2xl border border-amber-200 bg-amber-50 p-4">
               <div className="font-extrabold text-amber-950">
@@ -1000,7 +1057,7 @@ export default function NewVehicleClient({
                 <div className="flex items-start gap-2 overflow-x-auto pb-1">
                   <button
                     type="button"
-                    onClick={() => setImageSheetOpen(true)}
+                    onClick={() => galleryInputRef.current?.click()}
                     className="flex h-20 w-20 shrink-0 flex-col items-center justify-center rounded-xl border border-dashed border-gray-300 bg-gray-50 text-gray-600 active:scale-[0.98]"
                   >
                     <svg
@@ -1107,7 +1164,7 @@ export default function NewVehicleClient({
                     aria-hidden="true"
                   >
                     <path
-                      d="M9 5l7 7-7 7"
+                      d="M15 5l-7 7 7 7"
                       stroke="currentColor"
                       strokeWidth="1.7"
                       strokeLinecap="round"
@@ -1147,7 +1204,7 @@ export default function NewVehicleClient({
                     aria-hidden="true"
                   >
                     <path
-                      d="M9 5l7 7-7 7"
+                      d="M15 5l-7 7 7 7"
                       stroke="currentColor"
                       strokeWidth="1.7"
                       strokeLinecap="round"
@@ -1181,7 +1238,7 @@ export default function NewVehicleClient({
                     aria-hidden="true"
                   >
                     <path
-                      d="M9 5l7 7-7 7"
+                      d="M15 5l-7 7 7 7"
                       stroke="currentColor"
                       strokeWidth="1.7"
                       strokeLinecap="round"
@@ -1219,7 +1276,7 @@ export default function NewVehicleClient({
                     aria-hidden="true"
                   >
                     <path
-                      d="M9 5l7 7-7 7"
+                      d="M15 5l-7 7 7 7"
                       stroke="currentColor"
                       strokeWidth="1.7"
                       strokeLinecap="round"
@@ -1253,7 +1310,7 @@ export default function NewVehicleClient({
                     aria-hidden="true"
                   >
                     <path
-                      d="M9 5l7 7-7 7"
+                      d="M15 5l-7 7 7 7"
                       stroke="currentColor"
                       strokeWidth="1.7"
                       strokeLinecap="round"
@@ -1291,7 +1348,7 @@ export default function NewVehicleClient({
                     aria-hidden="true"
                   >
                     <path
-                      d="M9 5l7 7-7 7"
+                      d="M15 5l-7 7 7 7"
                       stroke="currentColor"
                       strokeWidth="1.7"
                       strokeLinecap="round"
@@ -1305,34 +1362,6 @@ export default function NewVehicleClient({
 
               {currentStep === 3 && (
                 <>
-              {/* بدنه */}
-              <button
-                type="button"
-                onClick={() => openPicker("body")}
-                className="flex min-h-[64px] w-full items-center justify-between px-4 text-right active:bg-gray-50"
-              >
-                <span className="text-[14px] font-semibold text-gray-700">
-                  وضعیت بدنه <span className="text-red-500">*</span>
-                </span>
-
-                <span
-                  className={`flex items-center gap-2 text-[14px] font-bold ${
-                    bodyCondition ? "text-red-600" : "text-gray-400"
-                  }`}
-                >
-                  {bodyCondition || "انتخاب"}
-                  <svg viewBox="0 0 24 24" fill="none" className="h-4 w-4">
-                    <path
-                      d="M9 5l7 7-7 7"
-                      stroke="currentColor"
-                      strokeWidth="1.7"
-                      strokeLinecap="round"
-                      strokeLinejoin="round"
-                    />
-                  </svg>
-                </span>
-              </button>
-
               {/* شاسی */}
               <button
                 type="button"
@@ -1351,7 +1380,7 @@ export default function NewVehicleClient({
                   {chassisCondition || "انتخاب"}
                   <svg viewBox="0 0 24 24" fill="none" className="h-4 w-4">
                     <path
-                      d="M9 5l7 7-7 7"
+                      d="M15 5l-7 7 7 7"
                       stroke="currentColor"
                       strokeWidth="1.7"
                       strokeLinecap="round"
@@ -1387,7 +1416,7 @@ export default function NewVehicleClient({
                   {engineCondition || "انتخاب"}
                   <svg viewBox="0 0 24 24" fill="none" className="h-4 w-4">
                     <path
-                      d="M9 5l7 7-7 7"
+                      d="M15 5l-7 7 7 7"
                       stroke="currentColor"
                       strokeWidth="1.7"
                       strokeLinecap="round"
@@ -1415,7 +1444,7 @@ export default function NewVehicleClient({
                   {formatInsuranceDate(insuranceDeadline)}
                   <svg viewBox="0 0 24 24" fill="none" className="h-4 w-4">
                     <path
-                      d="M9 5l7 7-7 7"
+                      d="M15 5l-7 7 7 7"
                       stroke="currentColor"
                       strokeWidth="1.7"
                       strokeLinecap="round"
@@ -1443,7 +1472,7 @@ export default function NewVehicleClient({
                   {gearboxType || "انتخاب"}
                   <svg viewBox="0 0 24 24" fill="none" className="h-4 w-4">
                     <path
-                      d="M9 5l7 7-7 7"
+                      d="M15 5l-7 7 7 7"
                       stroke="currentColor"
                       strokeWidth="1.7"
                       strokeLinecap="round"
@@ -1471,7 +1500,7 @@ export default function NewVehicleClient({
                   {gearboxCondition || "انتخاب"}
                   <svg viewBox="0 0 24 24" fill="none" className="h-4 w-4">
                     <path
-                      d="M9 5l7 7-7 7"
+                      d="M15 5l-7 7 7 7"
                       stroke="currentColor"
                       strokeWidth="1.7"
                       strokeLinecap="round"
@@ -1503,105 +1532,6 @@ export default function NewVehicleClient({
               )}
             </div>
           </section>
-
-          {/* انتخاب عکس */}
-          {imageSheetOpen && (
-            <div className="fixed inset-0 z-[80] flex items-end bg-black/30">
-              <button
-                type="button"
-                aria-label="بستن انتخاب عکس"
-                className="absolute inset-0"
-                onClick={() => setImageSheetOpen(false)}
-              />
-
-              <div
-                className="relative w-full rounded-t-3xl bg-white px-4 pb-8 pt-4 shadow-2xl"
-                dir="rtl"
-              >
-                <div className="mx-auto mb-5 h-1 w-10 rounded-full bg-gray-200" />
-
-                <h3 className="mb-4 text-center text-[17px] font-extrabold text-gray-950">
-                  انتخاب عکس
-                </h3>
-
-                <button
-                  type="button"
-                  onClick={() => cameraInputRef.current?.click()}
-                  className="flex min-h-[58px] w-full items-center gap-3 border-b border-gray-100 text-right"
-                >
-                  <span className="flex h-10 w-10 items-center justify-center rounded-xl bg-gray-100 text-gray-700">
-                    <svg
-                      viewBox="0 0 24 24"
-                      fill="none"
-                      className="h-5 w-5"
-                      aria-hidden="true"
-                    >
-                      <path
-                        d="M5 8.5A2.5 2.5 0 017.5 6h1.7l1.1-1.5h3.4L14.8 6h1.7A2.5 2.5 0 0119 8.5v8A2.5 2.5 0 0116.5 19h-9A2.5 2.5 0 015 16.5v-8Z"
-                        stroke="currentColor"
-                        strokeWidth="1.5"
-                        strokeLinejoin="round"
-                      />
-                      <circle
-                        cx="12"
-                        cy="12.5"
-                        r="3"
-                        stroke="currentColor"
-                        strokeWidth="1.5"
-                      />
-                    </svg>
-                  </span>
-
-                  <span className="text-[14px] font-bold text-gray-900">
-                    عکس با دوربین
-                  </span>
-                </button>
-
-                <button
-                  type="button"
-                  onClick={() => galleryInputRef.current?.click()}
-                  className="flex min-h-[58px] w-full items-center gap-3 text-right"
-                >
-                  <span className="flex h-10 w-10 items-center justify-center rounded-xl bg-gray-100 text-gray-700">
-                    <svg
-                      viewBox="0 0 24 24"
-                      fill="none"
-                      className="h-5 w-5"
-                      aria-hidden="true"
-                    >
-                      <rect
-                        x="4"
-                        y="4"
-                        width="16"
-                        height="16"
-                        rx="2"
-                        stroke="currentColor"
-                        strokeWidth="1.5"
-                      />
-                      <circle
-                        cx="9"
-                        cy="9"
-                        r="1.5"
-                        stroke="currentColor"
-                        strokeWidth="1.5"
-                      />
-                      <path
-                        d="M5.5 17l4.5-4.5 3.2 3.2 2.3-2.3 3 3.6"
-                        stroke="currentColor"
-                        strokeWidth="1.5"
-                        strokeLinecap="round"
-                        strokeLinejoin="round"
-                      />
-                    </svg>
-                  </span>
-
-                  <span className="text-[14px] font-bold text-gray-900">
-                    عکس از گالری
-                  </span>
-                </button>
-              </div>
-            </div>
-          )}
 
           {/* picker */}
           {pickerOpen && (
@@ -1725,7 +1655,7 @@ export default function NewVehicleClient({
                                   aria-hidden="true"
                                 >
                                   <path
-                                    d="M9 5l7 7-7 7"
+                                    d="M15 5l-7 7 7 7"
                                     stroke="currentColor"
                                     strokeWidth="1.7"
                                     strokeLinecap="round"
@@ -1783,7 +1713,7 @@ export default function NewVehicleClient({
                                     aria-hidden="true"
                                   >
                                     <path
-                                      d="M9 5l7 7-7 7"
+                                      d="M15 5l-7 7 7 7"
                                       stroke="currentColor"
                                       strokeWidth="1.7"
                                       strokeLinecap="round"
@@ -1855,7 +1785,7 @@ export default function NewVehicleClient({
                                     aria-hidden="true"
                                   >
                                     <path
-                                      d="M9 5l7 7-7 7"
+                                      d="M15 5l-7 7 7 7"
                                       stroke="currentColor"
                                       strokeWidth="1.7"
                                       strokeLinecap="round"
@@ -1871,9 +1801,14 @@ export default function NewVehicleClient({
                   )}
 
                   {pickerOpen === "year" && (
-                    <div className="grid grid-cols-3 gap-2 p-4">
-                      {Array.from({ length: 106 }, (_, index) => 1405 - index).map(
-                        (year) => (
+                    <div className="space-y-1 p-4">
+                      {Array.from(
+                        { length: 106 },
+                        (_, index) => 1405 - index
+                      ).map((year) => {
+                        const gregorianYear = year + 621;
+
+                        return (
                           <button
                             key={year}
                             type="button"
@@ -1881,22 +1816,30 @@ export default function NewVehicleClient({
                               setModelYear(String(year));
                               setPickerOpen(null);
                             }}
-                            className={`rounded-xl border py-3 text-[14px] font-bold ${
+                            className={`flex min-h-[58px] w-full items-center justify-center rounded-xl border text-[15px] font-bold transition ${
                               modelYear === String(year)
                                 ? "border-red-500 bg-red-50 text-red-600"
-                                : "border-gray-200 text-gray-700"
+                                : "border-gray-200 bg-white text-gray-700 active:bg-gray-50"
                             }`}
                           >
-                            <span>
+                            <span dir="ltr" className="tabular-nums">
                               {year.toLocaleString("fa-IR", {
                                 useGrouping: false,
                               })}
-                              <span className="mx-1 text-gray-400">/</span>
-                              {year - 1405 + 2026}
+                              <span className="mx-2 text-gray-300">/</span>
+                              <span>
+                                {gregorianYear.toLocaleString("fa-IR", {
+                                  useGrouping: false,
+                                })}
+                              </span>
                             </span>
+
+                            {modelYear === String(year) && (
+                              <span className="mr-3 text-red-500">✓</span>
+                            )}
                           </button>
-                        )
-                      )}
+                        );
+                      })}
                     </div>
                   )}
 
@@ -1979,9 +1922,17 @@ export default function NewVehicleClient({
                     autoFocus
                     type="text"
                     inputMode="numeric"
-                    value={pickerOpen === "mileage" ? mileage : price}
+                    value={
+                      pickerOpen === "mileage"
+                        ? mileage
+                          ? Number(mileage).toLocaleString("fa-IR")
+                          : ""
+                        : price
+                          ? Number(price).toLocaleString("fa-IR")
+                          : ""
+                    }
                     onChange={(e) => {
-                      const value = normalizeDigits(e.target.value);
+                      const value = normalizeDigits(e.target.value).replace(/\D/g, "");
 
                       if (pickerOpen === "mileage") {
                         setMileage(value);
@@ -1999,10 +1950,7 @@ export default function NewVehicleClient({
 
                   {pickerOpen === "price" && price && (
                     <p className="mt-3 text-center text-[14px] font-bold text-gray-600">
-                      {Number(
-                        price.replace(/[^0-9]/g, "") || 0
-                      ).toLocaleString("fa-IR")} {" "}
-                      تومان
+                      {formatPriceUnit(price)}
                     </p>
                   )}
 
@@ -2143,7 +2091,7 @@ export default function NewVehicleClient({
 
               {pickerOpen === "gearboxType" && (
                     <div className="space-y-1 p-4">
-                      {["دنده‌ای", "اتوماتیک", "CVT", "دوکلاچه", "AMT"]
+                      {["دنده‌ای", "اتومات"]
                         .filter((item) => item.includes(pickerSearch))
                         .map((item) => (
                           <button

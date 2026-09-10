@@ -27,11 +27,25 @@ export type DashboardImage = {
   sort_order: number;
 };
 
+export type DashboardStats = {
+  total_vehicle_count: number;
+  available_vehicle_count: number;
+  my_vehicle_count: number;
+  my_available_vehicle_count: number;
+  favorite_count: number;
+  dealership_count: number;
+  user_count: number;
+};
+
 export type DashboardData = {
   current_user_id: string | null;
+  role: string | null;
+  dealership_id: string | null;
+  dealership_name: string | null;
   vehicles: DashboardVehicle[];
   images: DashboardImage[];
   favorite_vehicle_ids: string[];
+  stats: DashboardStats;
 };
 
 /**
@@ -60,10 +74,26 @@ export const getDashboardData = cache(
 
     const payload = (data ?? {}) as Partial<DashboardData>;
 
+    const rawStats = payload.stats as
+      | Partial<DashboardStats>
+      | undefined;
+
     return {
       current_user_id:
         typeof payload.current_user_id === "string"
           ? payload.current_user_id
+          : null,
+      role:
+        typeof payload.role === "string"
+          ? payload.role
+          : null,
+      dealership_id:
+        typeof payload.dealership_id === "string"
+          ? payload.dealership_id
+          : null,
+      dealership_name:
+        typeof payload.dealership_name === "string"
+          ? payload.dealership_name
           : null,
       vehicles: Array.isArray(payload.vehicles)
         ? payload.vehicles
@@ -74,6 +104,22 @@ export const getDashboardData = cache(
       favorite_vehicle_ids: Array.isArray(payload.favorite_vehicle_ids)
         ? payload.favorite_vehicle_ids
         : [],
+      stats: {
+        total_vehicle_count:
+          Number(rawStats?.total_vehicle_count ?? 0),
+        available_vehicle_count:
+          Number(rawStats?.available_vehicle_count ?? 0),
+        my_vehicle_count:
+          Number(rawStats?.my_vehicle_count ?? 0),
+        my_available_vehicle_count:
+          Number(rawStats?.my_available_vehicle_count ?? 0),
+        favorite_count:
+          Number(rawStats?.favorite_count ?? 0),
+        dealership_count:
+          Number(rawStats?.dealership_count ?? 0),
+        user_count:
+          Number(rawStats?.user_count ?? 0),
+      },
     };
   },
 );

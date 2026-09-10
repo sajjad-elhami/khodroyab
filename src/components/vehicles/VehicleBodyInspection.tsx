@@ -5,7 +5,6 @@ import {
   CONDITION_LABEL,
   CONDITION_TEXT,
   CONDITIONS,
-  conditionFill,
 } from "./vehicleBodyDiagram";
 import VehicleBodyMap from "./VehicleBodyMap";
 
@@ -169,15 +168,15 @@ export default function VehicleBodyInspection({
 
         {selectedPart && (
           <div
-            className="fixed inset-0 z-50 flex items-center justify-center bg-slate-950/50 p-4 backdrop-blur-sm"
+            className="fixed inset-0 z-50 flex h-[100dvh] flex-col bg-slate-950/50 backdrop-blur-sm"
             onMouseDown={(event) => {
               if (event.target === event.currentTarget) {
                 setSelectedPart(null);
               }
             }}
           >
-            <div className="max-h-[90vh] w-full max-w-lg overflow-y-auto rounded-2xl bg-white shadow-2xl">
-              <div className="sticky top-0 z-10 border-b border-slate-200 bg-white px-5 py-4">
+            <div className="mx-auto flex h-full w-full max-w-lg flex-col overflow-hidden bg-white shadow-2xl">
+              <div className="shrink-0 border-b border-slate-200 bg-white px-5 py-4">
                 <div className="flex items-center justify-between">
                   <div>
                     <div className="text-lg font-extrabold text-slate-950">
@@ -193,13 +192,14 @@ export default function VehicleBodyInspection({
                     type="button"
                     onClick={() => setSelectedPart(null)}
                     className="rounded-xl px-3 py-2 text-xl text-slate-400 hover:bg-slate-100"
+                    aria-label="بستن"
                   >
                     ×
                   </button>
                 </div>
               </div>
 
-              <div className="p-5">
+              <div className="min-h-0 flex-1 overflow-y-auto overscroll-contain p-5 pb-6">
                 <div className="mb-3 text-sm font-bold text-slate-700">
                   وضعیت قطعه
                 </div>
@@ -283,12 +283,7 @@ export default function VehicleBodyInspection({
                   </span>
 
                   <span
-                    className="rounded-lg px-3 py-1.5 text-xs font-semibold text-slate-800"
-                    style={{
-                      backgroundColor: conditionFill(
-                        getPartStatus(selectedPart.code)
-                      ),
-                    }}
+                    className="rounded-lg bg-slate-100 px-3 py-1.5 text-xs font-semibold text-slate-800"
                   >
                     {CONDITION_LABEL[
                       getPartStatus(selectedPart.code)
@@ -296,10 +291,14 @@ export default function VehicleBodyInspection({
                   </span>
                 </div>
 
+                <div className="h-4" />
+              </div>
+
+              <div className="shrink-0 border-t border-slate-200 bg-white p-4 pb-[max(1rem,env(safe-area-inset-bottom))] shadow-[0_-4px_16px_rgba(15,23,42,0.06)]">
                 <button
                   type="button"
                   onClick={() => setSelectedPart(null)}
-                  className="mt-5 w-full rounded-xl bg-slate-900 px-5 py-3 text-sm font-bold text-white transition hover:bg-slate-800"
+                  className="w-full rounded-xl bg-slate-900 px-5 py-3.5 text-sm font-bold text-white transition hover:bg-slate-800 active:scale-[0.99]"
                 >
                   تأیید و بستن
                 </button>

@@ -1,11 +1,11 @@
-import DealershipsClient from "./DealershipsClient";
+import MyDealershipClient from "./MyDealershipClient";
 import { requireAuth } from "@/lib/auth/guards";
-import { getDealershipPageData } from "@/lib/data/dealerships/getDealershipPageData";
+import { getMyDealershipPageData } from "@/lib/data/dealerships/getMyDealershipPageData";
 
 export default async function DealershipsPage() {
   const { supabase } = await requireAuth();
 
-  const initialData = await getDealershipPageData(supabase);
+  const initialData = await getMyDealershipPageData(supabase, 30, 0);
 
-  return <DealershipsClient initialData={initialData} />;
+  return <MyDealershipClient initialData={initialData} />;
 }
