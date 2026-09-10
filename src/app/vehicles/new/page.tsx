@@ -1,6 +1,7 @@
 import NewVehicleClient from "./NewVehicleClient";
 import { requireAuth } from "@/lib/auth/guards";
 import { getVehicleNewPageData } from "@/lib/data/vehicles/getVehicleNewPageData";
+import RegistrationBackButton from "@/components/vehicles/RegistrationBackButton";
 
 type NewVehiclePageProps = {
   searchParams: Promise<{
@@ -8,14 +9,15 @@ type NewVehiclePageProps = {
   }>;
 };
 
-export default async function NewVehiclePage({
-  searchParams,
-}: NewVehiclePageProps) {
+export default async function NewVehiclePage({ searchParams }: NewVehiclePageProps) {
   const { supabase } = await requireAuth();
-
   const params = await searchParams;
-
   const initialData = await getVehicleNewPageData(supabase, params.dealershipId ?? null);
 
-  return <NewVehicleClient initialData={initialData} />;
+  return (
+    <>
+      <RegistrationBackButton />
+      <NewVehicleClient initialData={initialData} />
+    </>
+  );
 }
