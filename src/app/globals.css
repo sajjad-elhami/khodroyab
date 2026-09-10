@@ -24,3 +24,32 @@ body {
   color: var(--foreground);
   font-family: "Vazirmatn", sans-serif;
 }
+
+/* Mobile bottom navigation refinements */
+nav.fixed.bottom-0 > div {
+  height: 82px !important;
+}
+
+nav.fixed.bottom-0 > div > a[href="/vehicles"] { order: 1; }
+nav.fixed.bottom-0 > div > a[href="/favorites"] { order: 2; }
+nav.fixed.bottom-0 > div > a[href="/vehicles/new"] { order: 3; }
+nav.fixed.bottom-0 > div > a[href="/dealerships"] { order: 4; }
+nav.fixed.bottom-0 > div > a[href="/market-analysis"] { order: 5; }
+
+nav.fixed.bottom-0 > div > a > span:last-child {
+  display: none !important;
+}
+
+nav.fixed.bottom-0 > div > a > span:first-child > svg {
+  width: 23px !important;
+  height: 23px !important;
+}
+
+nav.fixed.bottom-0 > div > a > span:nth-child(2) {
+  font-size: 11px !important;
+}
+
+nav.fixed.bottom-0 > div > a.text-gray-950,
+nav.fixed.bottom-0 > div > a.text-gray-950 span {
+  color: #dc2626 !important;
+}
