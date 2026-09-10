@@ -11,6 +11,7 @@ import type { VehiclesSearchPageData } from "@/lib/data/vehicles/getVehiclesSear
 import { searchVehiclesAction } from "./actions";
 import { toggleVehicleFavoriteAction } from "./mutations";
 import MobileAppShell from "@/components/mobile/MobileAppShell";
+import VehicleBrandModelPicker from "@/components/vehicles/VehicleBrandModelPicker";
 import {
   BODY_CODES,
   STRUCTURE_CODES,
@@ -1305,30 +1306,19 @@ export default function VehiclesClient({
               <div className="space-y-3">
 
                 <section className="rounded-2xl border border-gray-200 bg-white p-3">
-                  <h3 className="mb-2 text-sm font-bold">
-                    برند و تیپ
-                  </h3>
+        <h3 className="mb-2 text-sm font-bold">
+          برند و مدل
+        </h3>
 
-                  <div className="space-y-2">
-                    <input
-                      value={brand}
-                      onChange={(e) =>
-                        handleFilterChange(setBrand, e.target.value)
-                      }
-                      placeholder="برند"
-                      className="h-12 w-full rounded-xl border border-gray-200 bg-gray-50 px-3 text-base outline-none"
-                    />
-
-                    <input
-                      value={model}
-                      onChange={(e) =>
-                        handleFilterChange(setModel, e.target.value)
-                      }
-                      placeholder="تیپ"
-                      className="h-12 w-full rounded-xl border border-gray-200 bg-gray-50 px-3 text-base outline-none"
-                    />
-                  </div>
-                </section>
+        <VehicleBrandModelPicker
+          brand={brand}
+          model={model}
+          onChange={(nextBrand, nextModel) => {
+            handleFilterChange(setBrand, nextBrand);
+            handleFilterChange(setModel, nextModel);
+          }}
+        />
+      </section>
 
                 <section className="rounded-2xl border border-gray-200 bg-white p-3">
                   <h3 className="mb-2 text-sm font-bold">
