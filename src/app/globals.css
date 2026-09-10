@@ -40,10 +40,6 @@ nav.fixed.bottom-0 > div > a {
   transform: translateY(-5px);
 }
 
-nav.fixed.bottom-0 > div > a > span:last-child {
-  display: none !important;
-}
-
 nav.fixed.bottom-0 > div > a > span:first-child > svg {
   width: 23px !important;
   height: 23px !important;
@@ -56,4 +52,9 @@ nav.fixed.bottom-0 > div > a > span:nth-child(2) {
 nav.fixed.bottom-0 > div > a.text-gray-950,
 nav.fixed.bottom-0 > div > a.text-gray-950 span {
   color: #dc2626 !important;
+}
+
+/* Vehicle cards: give the text column enough vertical room for all metadata. */
+div:has(> div.h-full.w-\[122px\]) {
+  height: 150px !important;
 }
