@@ -1,5 +1,6 @@
 "use server";
 
+import { revalidatePath } from "next/cache";
 import { createClient } from "@/lib/supabase/server";
 import { createAdminClient } from "@/lib/supabase/admin";
 import { getMyDealershipPageData } from "@/lib/data/dealerships/getMyDealershipPageData";
@@ -36,6 +37,8 @@ export async function updateInventoryVehicleAction(vehicleId: string) {
     }
     const { error } = await query;
     if (error) throw error;
+    revalidatePath("/dealerships");
+    revalidatePath("/vehicles");
     return { ok: true as const };
   } catch (error) {
     return {
@@ -82,6 +85,12 @@ export async function deleteInventoryVehicleAction(vehicleId: string) {
       p_vehicle_id: vehicleId,
     });
     if (error) throw error;
+
+    // Invalidate every inventory surface so a successful deletion is visible
+    // immediately, even when a server-rendered route was previously cached.
+    revalidatePath("/dealerships");
+    revalidatePath("/vehicles");
+    revalidatePath(`/vehicles/${vehicleId}`);
 
     return { ok: true as const };
   } catch (error) {
