@@ -25,6 +25,7 @@ export type MyDealershipPageData = {
   role: string | null;
   dealershipId: string | null;
   dealershipName: string | null;
+  dealershipIsActive: boolean | null;
   totalCount: number;
   vehicles: MyDealershipVehicle[];
 };
@@ -60,6 +61,24 @@ export async function getMyDealershipPageData(
     ? payload.vehicles
     : [];
 
+  let dealershipIsActive: boolean | null = null;
+
+  if (payload.dealership_id) {
+    const { data: dealership, error: dealershipError } = await supabase
+      .from("dealerships")
+      .select("is_active")
+      .eq("id", payload.dealership_id)
+      .maybeSingle();
+
+    if (dealershipError) {
+      throw new Error(
+        `Failed to load dealership status: ${dealershipError.message}`,
+      );
+    }
+
+    dealershipIsActive = dealership?.is_active ?? null;
+  }
+
   const vehicles = rawVehicles.map((vehicle) => {
     let imageUrl: string | null = null;
 
@@ -81,6 +100,7 @@ export async function getMyDealershipPageData(
     role: payload.role ?? null,
     dealershipId: payload.dealership_id ?? null,
     dealershipName: payload.dealership_name ?? null,
+    dealershipIsActive,
     totalCount: Number(payload.total_count ?? 0),
     vehicles,
   };
