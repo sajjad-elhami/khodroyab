@@ -84,3 +84,12 @@ div:has(> div.h-full.w-\[122px\]) img {
   height: 100% !important;
   object-fit: cover !important;
 }
+
+/* The vehicle search control now lives in the fixed top header. */
+main > div > div.space-y-3 > section:first-child > button:first-child {
+  display: none !important;
+}
+
+main > div > div.space-y-3 > section:first-child > div {
+  margin-top: 0 !important;
+}
