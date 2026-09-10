@@ -1,6 +1,9 @@
 "use server";
 
 import { createClient } from "@/lib/supabase/server";
+import {
+  deleteVehicleImageAction as deleteVehicleImageMutation,
+} from "./imageMutations";
 
 export async function updateEditableVehicleAction(input: {
   vehicleId: string;
@@ -61,4 +64,9 @@ export async function updateEditableVehicleAction(input: {
   return { ok: true as const };
 }
 
-export { deleteVehicleImageAction } from "./imageMutations";
+export async function deleteVehicleImageAction(
+  imageId: string,
+  vehicleId: string,
+) {
+  return deleteVehicleImageMutation(imageId, vehicleId);
+}
