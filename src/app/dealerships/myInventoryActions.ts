@@ -36,48 +36,26 @@ export async function deleteInventoryVehicleAction(vehicleId: string) {
   try {
     const { supabase } = await getCurrentUser();
 
-    const { data: images, error: imagesError } = await supabase
-      .from("vehicle_images")
-      .select("storage_path")
-      .eq("vehicle_id", vehicleId);
-    if (imagesError) throw imagesError;
+    // حذف کامل توسط RPC امن سمت دیتابیس انجام می‌شود:
+    // خود آگهی + عکس‌های DB + علاقه‌مندی‌ها + درخواست‌ها + فایل‌های Storage.
+    // این کار از شکست حذف Storage به‌خاطر RLS سمت کلاینت جلوگیری می‌کند.
+    const { error } = await supabase.rpc("delete_vehicle_completely", {
+      p_vehicle_id: vehicleId,
+    });
 
-    const storagePaths = (images ?? [])
-      .map((image) => image.storage_path)
-      .filter((path): path is string => Boolean(path));
-
-    if (storagePaths.length > 0) {
-      const { error: storageError } = await supabase.storage.from("vehicle-images").remove(storagePaths);
-      if (storageError) throw storageError;
-    }
-
-    const { error: deleteError } = await supabase.rpc("delete_vehicle_completely", { p_vehicle_id: vehicleId });
-    if (deleteError) throw deleteError;
+    if (error) throw error;
 
     return { ok: true as const };
   } catch (error) {
-    return { ok: false as const, error: error instanceof Error ? error.message : "خطا در حذف کامل خودرو." };
+    return {
+      ok: false as const,
+      error: error instanceof Error ? error.message : "خطا در حذف کامل خودرو.",
+    };
   }
 }
 
 export async function markInventoryVehicleSoldAction(vehicleId: string) {
-  try {
-    const { supabase, userId } = await getCurrentUser();
-    const { data: profile, error: profileError } = await supabase.from("profiles").select("role, dealership_id").eq("id", userId).maybeSingle();
-    if (profileError) throw profileError;
-    const isAdmin = profile?.role === "admin";
-    const dealershipId = profile?.dealership_id;
-    let query = supabase.from("vehicles").update({ status: "sold", inventory_confirmed_at: new Date().toISOString() }).eq("id", vehicleId);
-    if (!isAdmin) {
-      if (!dealershipId) return { ok: false as const, error: "نمایشگاه کاربر مشخص نیست." };
-      query = query.eq("dealership_id", dealershipId);
-    }
-    const { error } = await query;
-    if (error) throw error;
-    return { ok: true as const };
-  } catch (error) {
-    return { ok: false as const, error: error instanceof Error ? error.message : "خطا در ثبت فروش خودرو." };
-  }
+  return deleteInventoryVehicleAction(vehicleId);
 }
 
 export async function loadMyDealershipInventoryAction(offset: number, limit = 30) {
