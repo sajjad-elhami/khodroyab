@@ -310,8 +310,6 @@ export default function MobileAppShell({
     [provinces, fullySelectedProvinceIds]
   );
 
-
-
   const selectedCitiesInActiveProvince = useMemo(() => {
     if (!activeProvinceId) return [];
 
@@ -494,7 +492,7 @@ export default function MobileAppShell({
                       event.target.value
                     )
                   }
-                  placeholder="جستجو در شهرهای ایران"
+                  placeholder="جستجوی خودرو..."
                   className="h-12 w-full rounded-2xl bg-gray-100 px-10 text-right text-[16px] text-gray-900 outline-none placeholder:text-gray-400 focus:bg-gray-50"
                 />
 
@@ -637,57 +635,55 @@ export default function MobileAppShell({
                   <div className="flex flex-wrap gap-2">
                     {selectedAllProvinces.map(
                       (province) => (
-                          <div
-                            key={`province-${province.id}`}
-                            className="flex min-h-9 items-center gap-2 rounded-xl border border-red-200 bg-red-50 px-2.5 py-1.5"
-                          >
-                            <span className="text-xs font-bold text-red-700">
-                              کل شهرهای{" "}
-                              {province.name}
-                            </span>
-
-                            <button
-                              type="button"
-                              onClick={() =>
-                                removeProvinceSelection(
-                                  province.id
-                                )
-                              }
-                              className="flex h-6 w-6 shrink-0 items-center justify-center rounded-full text-base font-bold leading-none text-red-500 active:bg-red-100"
-                              aria-label={`حذف کل شهرهای ${province.name}`}
-                            >
-                              ×
-                            </button>
-                          </div>
-                        )
-                    )}
-
-                    {selectedCities.map((city) => (
                         <div
-                          key={`city-${city.id}`}
+                          key={`province-${province.id}`}
                           className="flex min-h-9 items-center gap-2 rounded-xl border border-red-200 bg-red-50 px-2.5 py-1.5"
                         >
                           <span className="text-xs font-bold text-red-700">
-                            {city.name}
+                            کل شهرهای {province.name}
                           </span>
 
                           <button
                             type="button"
                             onClick={() =>
-                              updateSelectedCityIds(
-                                selectedCityIds.filter(
-                                  (id) =>
-                                    id !== city.id
-                                )
+                              removeProvinceSelection(
+                                province.id
                               )
                             }
                             className="flex h-6 w-6 shrink-0 items-center justify-center rounded-full text-base font-bold leading-none text-red-500 active:bg-red-100"
-                            aria-label={`حذف ${city.name}`}
+                            aria-label={`حذف کل شهرهای ${province.name}`}
                           >
                             ×
                           </button>
                         </div>
-                      ))}
+                      )
+                    )}
+
+                    {selectedCities.map((city) => (
+                      <div
+                        key={`city-${city.id}`}
+                        className="flex min-h-9 items-center gap-2 rounded-xl border border-red-200 bg-red-50 px-2.5 py-1.5"
+                      >
+                        <span className="text-xs font-bold text-red-700">
+                          {city.name}
+                        </span>
+
+                        <button
+                          type="button"
+                          onClick={() =>
+                            updateSelectedCityIds(
+                              selectedCityIds.filter(
+                                (id) => id !== city.id
+                              )
+                            )
+                          }
+                          className="flex h-6 w-6 shrink-0 items-center justify-center rounded-full text-base font-bold leading-none text-red-500 active:bg-red-100"
+                          aria-label={`حذف ${city.name}`}
+                        >
+                          ×
+                        </button>
+                      </div>
+                    ))}
                   </div>
                 </div>
               )}
@@ -711,31 +707,26 @@ export default function MobileAppShell({
                           : "border-gray-300 bg-white"
                       }`}
                     >
-                      {selectedCityIds.length ===
-                        0 && "✓"}
+                      {selectedCityIds.length === 0 && "✓"}
                     </span>
                   </button>
 
-                  {filteredProvinces.map(
-                    (province) => (
-                      <button
-                        key={province.id}
-                        type="button"
-                        onClick={() =>
-                          selectProvince(province)
-                        }
-                        className="flex w-full items-center justify-between rounded-2xl border border-gray-100 bg-white px-4 py-4 text-right active:bg-gray-50"
-                      >
-                        <span className="text-sm font-bold text-gray-800">
-                          {province.name}
-                        </span>
+                  {filteredProvinces.map((province) => (
+                    <button
+                      key={province.id}
+                      type="button"
+                      onClick={() => selectProvince(province)}
+                      className="flex w-full items-center justify-between rounded-2xl border border-gray-100 bg-white px-4 py-4 text-right active:bg-gray-50"
+                    >
+                      <span className="text-sm font-bold text-gray-800">
+                        {province.name}
+                      </span>
 
-                        <span className="text-lg font-bold text-gray-400">
-                          &gt;
-                        </span>
-                      </button>
-                    )
-                  )}
+                      <span className="text-lg font-bold text-gray-400">
+                        &gt;
+                      </span>
+                    </button>
+                  ))}
 
                   {filteredProvinces.length === 0 && (
                     <div className="py-10 text-center text-sm text-gray-400">
@@ -749,31 +740,23 @@ export default function MobileAppShell({
                     type="button"
                     onClick={() => {
                       setProvinceSearch("");
-                      setLocationMode(
-                        "province"
-                      );
+                      setLocationMode("province");
                       setActiveProvinceId("");
                     }}
                     className="mb-3 flex w-full items-center justify-between rounded-2xl border border-gray-100 bg-gray-50 px-4 py-3.5 text-right text-sm font-bold text-gray-700"
                   >
                     <span>← تغییر استان</span>
 
-                    <span>
-                      {activeProvince?.name ||
-                        "استان"}
-                    </span>
+                    <span>{activeProvince?.name || "استان"}</span>
                   </button>
 
                   <button
                     type="button"
-                    onClick={
-                      toggleAllCitiesInProvince
-                    }
+                    onClick={toggleAllCitiesInProvince}
                     className="flex w-full items-center justify-between rounded-2xl border border-gray-100 bg-gray-50 px-4 py-4 text-right active:bg-gray-100"
                   >
                     <span className="text-sm font-bold text-gray-800">
-                      همه شهرهای{" "}
-                      {activeProvince?.name || ""}
+                      همه شهرهای {activeProvince?.name || ""}
                     </span>
 
                     <span
@@ -783,25 +766,19 @@ export default function MobileAppShell({
                           : "border-gray-300 bg-white"
                       }`}
                     >
-                      {allCitiesInActiveProvinceSelected &&
-                        "✓"}
+                      {allCitiesInActiveProvinceSelected && "✓"}
                     </span>
                   </button>
 
                   <div className="mt-2 space-y-2">
                     {filteredCities.map((city) => {
-                      const active =
-                        selectedCityIds.includes(
-                          city.id
-                        );
+                      const active = selectedCityIds.includes(city.id);
 
                       return (
                         <button
                           key={city.id}
                           type="button"
-                          onClick={() =>
-                            toggleCity(city)
-                          }
+                          onClick={() => toggleCity(city)}
                           className="flex w-full items-center justify-between rounded-2xl border border-gray-100 bg-white px-4 py-4 text-right active:bg-gray-50"
                         >
                           <span className="text-sm font-bold text-gray-800">
@@ -839,11 +816,8 @@ export default function MobileAppShell({
                   className="w-full rounded-2xl bg-gray-950 py-4 text-sm font-bold text-white active:scale-[0.99]"
                 >
                   تأیید انتخاب
-                  {selectedCitiesInActiveProvince.length >
-                  0
-                    ? ` (${faNumber.format(
-                        selectedCitiesInActiveProvince.length
-                      )})`
+                  {selectedCitiesInActiveProvince.length > 0
+                    ? ` (${faNumber.format(selectedCitiesInActiveProvince.length)})`
                     : ""}
                 </button>
               </div>
