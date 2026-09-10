@@ -1,9 +1,14 @@
 "use client";
 
 import Link from "next/link";
+import { useRouter } from "next/navigation";
 import { useState } from "react";
 import MobileAppShell from "@/components/mobile/MobileAppShell";
-import { loadMyDealershipInventoryAction } from "./myInventoryActions";
+import {
+  loadMyDealershipInventoryAction,
+  markInventoryVehicleSoldAction,
+  updateInventoryVehicleAction,
+} from "./myInventoryActions";
 import type { MyDealershipPageData, MyDealershipVehicle } from "@/lib/data/dealerships/getMyDealershipPageData";
 
 const PAGE_SIZE = 30;
@@ -13,18 +18,56 @@ function formatPrice(value: number | null) { return value === null ? "توافق
 function formatYear(value: number | null) { return value === null ? "—" : value.toLocaleString("fa-IR", { useGrouping: false }); }
 
 function VehicleCard({ vehicle }: { vehicle: MyDealershipVehicle }) {
+  const router = useRouter();
+  const [busy, setBusy] = useState<"update" | "sold" | null>(null);
+  const [actionError, setActionError] = useState("");
+
+  async function confirmInventory() {
+    if (busy) return;
+    setBusy("update");
+    setActionError("");
+
+    const result = await updateInventoryVehicleAction(vehicle.id);
+    if (!result.ok) {
+      setActionError(result.error);
+      setBusy(null);
+      return;
+    }
+
+    setBusy(null);
+    router.refresh();
+  }
+
+  async function markSold() {
+    if (busy || vehicle.status === "sold") return;
+    if (!window.confirm("این خودرو فروخته شده است؟")) return;
+
+    setBusy("sold");
+    setActionError("");
+
+    const result = await markInventoryVehicleSoldAction(vehicle.id);
+    if (!result.ok) {
+      setActionError(result.error);
+      setBusy(null);
+      return;
+    }
+
+    setBusy(null);
+    router.refresh();
+  }
+
   return (
     <article className="overflow-hidden rounded-[22px] border border-gray-100 bg-white shadow-[0_3px_18px_rgba(15,23,42,0.045)]">
       <div className="flex min-h-[132px] gap-3 p-3" dir="ltr">
-        <Link href={`/vehicles/${vehicle.id}`} className="h-[108px] w-[126px] shrink-0 overflow-hidden rounded-[17px] bg-gray-100 active:opacity-80" aria-label={`مشاهده ${vehicle.brand} ${vehicle.model}`}>
+        <div className="h-[108px] w-[126px] shrink-0 overflow-hidden rounded-[17px] bg-gray-100">
           {vehicle.image_url ? <div className="h-full w-full bg-cover bg-center" style={{ backgroundImage: `url(${vehicle.image_url})` }} /> : <div className="flex h-full items-center justify-center text-xs font-medium text-gray-400">بدون تصویر</div>}
-        </Link>
+        </div>
         <div className="min-w-0 flex-1 py-0.5" dir="rtl">
           <div className="flex items-start justify-between gap-2">
-            <Link href={`/vehicles/${vehicle.id}`} className="min-w-0 active:opacity-70">
+            <div className="min-w-0">
               <h3 className="truncate text-[15px] font-extrabold text-gray-950">{vehicle.brand} {vehicle.model}</h3>
               {vehicle.trim && <p className="mt-0.5 truncate text-xs text-gray-500">{vehicle.trim}</p>}
-            </Link>
+            </div>
             <span className={`shrink-0 rounded-full px-2 py-1 text-[10px] font-bold ${vehicle.status === "available" ? "bg-emerald-50 text-emerald-700" : "bg-gray-100 text-gray-500"}`}>
               {vehicle.status === "available" ? "موجود" : "فروخته شده"}
             </span>
@@ -33,9 +76,17 @@ function VehicleCard({ vehicle }: { vehicle: MyDealershipVehicle }) {
           <p className="mt-2 truncate text-sm font-extrabold text-gray-900">{formatPrice(vehicle.price)}</p>
         </div>
       </div>
-      <div className="grid grid-cols-2 border-t border-gray-100" dir="rtl">
-        <Link href={`/vehicles/${vehicle.id}`} className="py-2.5 text-center text-xs font-bold text-gray-500 active:bg-gray-50">مشاهده</Link>
-        <Link href={`/vehicles/${vehicle.id}/edit`} className="border-r border-gray-100 py-2.5 text-center text-xs font-extrabold text-gray-800 active:bg-gray-50">ویرایش</Link>
+
+      {actionError && <div className="border-t border-red-100 bg-red-50 px-3 py-2 text-xs leading-5 text-red-700">{actionError}</div>}
+
+      <div className="grid grid-cols-3 border-t border-gray-100" dir="rtl">
+        <button type="button" onClick={confirmInventory} disabled={busy !== null} className="py-2.5 text-center text-xs font-extrabold text-emerald-700 active:bg-emerald-50 disabled:opacity-50">
+          {busy === "update" ? "در حال بروزرسانی..." : "بروزرسانی"}
+        </button>
+        <button type="button" onClick={markSold} disabled={busy !== null || vehicle.status === "sold"} className="border-x border-gray-100 py-2.5 text-center text-xs font-extrabold text-red-600 active:bg-red-50 disabled:opacity-40">
+          {busy === "sold" ? "در حال ثبت..." : "فروخته شد"}
+        </button>
+        <Link href={`/vehicles/${vehicle.id}/edit`} className="py-2.5 text-center text-xs font-extrabold text-gray-800 active:bg-gray-50">ویرایش</Link>
       </div>
     </article>
   );
@@ -64,8 +115,7 @@ export default function MyDealershipClient({ initialData }: { initialData: MyDea
 
   return (
     <MobileAppShell>
-      <div dir="rtl" className="mx-auto w-full max-w-xl px-4 pb-32 pt-[88px]">
-        {/* صفحه «نمایشگاه من» هدر اختصاصی دارد؛ هدر عمومی MobileAppShell در این صفحه عمداً با این هدر پوشانده می‌شود. */}
+      <div dir="rtl" className="mx-auto w-full max-w-xl px-4 pb-32 pt-[68px]">
         <header className="fixed inset-x-0 top-0 z-50 border-b border-gray-100 bg-white/95 shadow-sm backdrop-blur-xl">
           <div className="mx-auto flex h-[68px] w-full max-w-xl items-center justify-between gap-3 px-4">
             <h1 className="min-w-0 flex-1 truncate text-right text-[21px] font-black tracking-tight text-gray-950">{title}</h1>
