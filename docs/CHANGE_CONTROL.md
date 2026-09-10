@@ -27,4 +27,6 @@ Files such as `*.backup-*` may be kept for forensic/reference purposes. They mus
 - Optional: `نوع گیربکس`, `وضعیت گیربکس`, `مهلت بیمه شخص ثالث`, `وضعیت موتور`.
 - Required: `وضعیت شاسی` and `کارشناسی بدنه`.
 - If no body part is marked as damaged/painted/etc., the derived overall body condition remains `سالم`.
-- The registration back control is a right-facing `→` at the top-right of the three registration stages.
+- The registration back control is the canonical `KhodroyabChevronIcon`, visually matching the compact chevron used by the search/selection UI, and it moves exactly one registration stage backward. On stage 1 it uses browser back.
+- Vehicle price is stored as the exact integer entered by the user and displayed with Persian digits and the `٬` thousands separator; no rounded human-readable price is shown underneath.
+- The `خودروی مشابه پیدا شد` duplicate-notice UI and its client-side duplicate-checking flow are removed from vehicle registration.
