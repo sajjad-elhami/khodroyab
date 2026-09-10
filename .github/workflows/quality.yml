@@ -7,7 +7,7 @@ on:
     branches: [main]
 
 permissions:
-  contents: write
+  contents: read
 
 jobs:
   quality:
@@ -16,8 +16,6 @@ jobs:
     steps:
       - name: Checkout
         uses: actions/checkout@v4
-        with:
-          fetch-depth: 0
 
       - name: Setup Node
         uses: actions/setup-node@v4
@@ -28,83 +26,8 @@ jobs:
       - name: Install dependencies
         run: npm install --no-audit --no-fund
 
-      - name: Apply registration source patch once
-        shell: python
-        run: |
-          from pathlib import Path
-
-          path = Path("src/app/vehicles/new/NewVehicleClient.tsx")
-          s = path.read_text(encoding="utf-8")
-
-          if "frontChassisCondition" not in s:
-              def replace_once(old, new, label):
-                  global s
-                  count = s.count(old)
-                  if count != 1:
-                      raise SystemExit(f"{label}: expected 1 match, found {count}")
-                  s = s.replace(old, new, 1)
-
-              replace_once(
-                  '  const [chassisCondition, setChassisCondition] = useState("");\n',
-                  '  const [frontChassisCondition, setFrontChassisCondition] = useState("");\n  const [rearChassisCondition, setRearChassisCondition] = useState("");\n  const [chassisTarget, setChassisTarget] = useState<"front" | "rear">("front");\n  const chassisCondition = JSON.stringify({\n    front: frontChassisCondition,\n    rear: rearChassisCondition,\n  });\n',
-                  "chassis state",
-              )
-              replace_once('    setChassisCondition("");\n', '    setFrontChassisCondition("");\n    setRearChassisCondition("");\n', "clear chassis state")
-              replace_once(
-                  '''    if (step === 3) {\n      if (!bodyCondition.trim()) {\n        return "وضعیت بدنه را انتخاب کنید.";\n      }\n\n      if (!chassisCondition.trim()) {\n        return "وضعیت شاسی را انتخاب کنید.";\n      }\n\n      if (!engineCondition.trim()) {\n        return "وضعیت موتور را انتخاب کنید.";\n      }\n\n      if (!insuranceDeadline.trim()) {\n        return "مهلت بیمه شخص ثالث را انتخاب کنید.";\n      }\n\n      if (!gearboxType.trim()) {\n        return "نوع گیربکس را انتخاب کنید.";\n      }\n\n      if (!gearboxCondition.trim()) {\n        return "وضعیت گیربکس را انتخاب کنید.";\n      }\n\n      return "";\n    }''',
-                  '''    if (step === 3) {\n      if (!frontChassisCondition.trim() || !rearChassisCondition.trim()) {\n        return "وضعیت شاسی جلو و عقب را کامل کنید.";\n      }\n\n      return "";\n    }''',
-                  "step 3 validation",
-              )
-              replace_once(
-                  '''  function goNextStep() {\n    const validationError = validateStep(currentStep);\n\n    if (validationError) {\n      setError(validationError);\n      return;\n    }\n\n    setError("");\n    setCurrentStep((step) => Math.min(step + 1, 3));\n  }''',
-                  '''  function highlightMissingRegistrationFields() {\n    if (currentStep !== 3) return;\n    const targets = [\n      ["شاسی جلو", !frontChassisCondition.trim()],\n      ["شاسی عقب", !rearChassisCondition.trim()],\n    ] as const;\n    let first: HTMLElement | null = null;\n    for (const [label, missing] of targets) {\n      const node = Array.from(document.querySelectorAll("button")).find((element) => element.textContent?.includes(label)) as HTMLButtonElement | undefined;\n      if (!node) continue;\n      if (missing) {\n        node.classList.add("border-red-400", "bg-red-50", "text-red-700", "ring-2", "ring-red-100");\n        if (!first) first = node;\n      } else {\n        node.classList.remove("border-red-400", "bg-red-50", "text-red-700", "ring-2", "ring-red-100");\n      }\n    }\n    first?.scrollIntoView({ behavior: "smooth", block: "center" });\n  }\n\n  function goNextStep() {\n    const validationError = validateStep(currentStep);\n    if (validationError) {\n      setError(validationError);\n      requestAnimationFrame(highlightMissingRegistrationFields);\n      return;\n    }\n    setError("");\n    setCurrentStep((step) => Math.min(step + 1, 3));\n  }''',
-                  "required field feedback",
-              )
-              replace_once(
-                  '''  useEffect(() => {\n    if (!brandId) {''',
-                  '''  useEffect(() => {\n    function handleRegistrationBack(event: Event) {\n      event.preventDefault();\n      setError("");\n      setCurrentStep((step) => {\n        if (step <= 1) {\n          window.history.back();\n          return step;\n        }\n        return step - 1;\n      });\n    }\n    window.addEventListener("khodroyab:registration-back", handleRegistrationBack);\n    return () => window.removeEventListener("khodroyab:registration-back", handleRegistrationBack);\n  }, []);\n\n  function openChassisPicker(target: "front" | "rear") {\n    setChassisTarget(target);\n    openPicker("chassis");\n  }\n\n  useEffect(() => {\n    if (!brandId) {''',
-                  "back stage handler",
-              )
-              replace_once(
-                  '''setChassisCondition(item);\n                              setPickerOpen(null);''',
-                  '''if (chassisTarget === "front") {\n                                setFrontChassisCondition(item);\n                              } else {\n                                setRearChassisCondition(item);\n                              }\n                              setPickerOpen(null);''',
-                  "chassis picker selection",
-              )
-
-              for old, new in [
-                  ('وضعیت موتور <span className="text-red-500">*</span>', 'وضعیت موتور'),
-                  ('مهلت بیمه شخص ثالث <span className="text-red-500">*</span>', 'مهلت بیمه شخص ثالث'),
-                  ('نوع گیربکس <span className="text-red-500">*</span>', 'نوع گیربکس'),
-                  ('وضعیت گیربکس <span className="text-red-500">*</span>', 'وضعیت گیربکس'),
-              ]:
-                  s = s.replace(old, new)
-
-              marker = 'onClick={() => openPicker("chassis")}'
-              marker_pos = s.find(marker)
-              if marker_pos < 0:
-                  raise SystemExit("chassis UI marker not found")
-              start = s.rfind("<button", 0, marker_pos)
-              end = s.find("</button>", marker_pos)
-              if start < 0 or end < 0:
-                  raise SystemExit("chassis UI bounds not found")
-              end += len("</button>")
-
-              replacement = '''<div className="space-y-2 px-4 py-3">\n                <div className="text-[14px] font-semibold text-gray-700">\n                  وضعیت شاسی <span className="text-red-500">*</span>\n                </div>\n                <div className="grid grid-cols-2 gap-2">\n                  <button type="button" onClick={() => openChassisPicker("front")} className={`flex min-h-[60px] items-center justify-between rounded-xl border px-3 text-right text-[13px] font-bold transition ${frontChassisCondition ? "border-red-200 bg-red-50 text-red-700" : "border-gray-200 bg-white text-gray-500"}`}>\n                    <span>شاسی جلو</span><span>{frontChassisCondition || "انتخاب"}</span>\n                  </button>\n                  <button type="button" onClick={() => openChassisPicker("rear")} className={`flex min-h-[60px] items-center justify-between rounded-xl border px-3 text-right text-[13px] font-bold transition ${rearChassisCondition ? "border-red-200 bg-red-50 text-red-700" : "border-gray-200 bg-white text-gray-500"}`}>\n                    <span>شاسی عقب</span><span>{rearChassisCondition || "انتخاب"}</span>\n                  </button>\n                </div>\n              </div>'''
-              s = s[:start] + replacement + s[end:]
-              path.write_text(s, encoding="utf-8")
-
       - name: Lint
         run: npm run lint
 
       - name: Typecheck
         run: npx tsc --noEmit
-
-      - name: Commit registration patch
-        if: github.event_name == 'push' && github.actor != 'github-actions[bot]'
-        run: |
-          if git diff --quiet -- src/app/vehicles/new/NewVehicleClient.tsx; then exit 0; fi
-          git config user.name "github-actions[bot]"
-          git config user.email "41898282+github-actions[bot]@users.noreply.github.com"
-          git add src/app/vehicles/new/NewVehicleClient.tsx
-          git commit -m "Apply final registration requirements"
-          git push
