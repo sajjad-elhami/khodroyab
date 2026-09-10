@@ -42,3 +42,29 @@ nav.fixed.bottom-0 > div > a.text-gray-950 span { color: #dc2626 !important; }
 div:has(> div.h-full.w-\[122px\]) { min-height: 150px !important; height: 150px !important; }
 article[class*="h-[175px]"] { height: 150px !important; }
 div:has(> div.h-full.w-\[122px\]) img { width: 100% !important; height: 100% !important; object-fit: cover !important; }
+
+/* Vehicle search: use the original lower search control as the real top control. */
+@media (max-width: 767px) {
+  main:has(article[class*="h-[175px]"]) header > div > div > button:nth-child(2) {
+    display: none !important;
+  }
+
+  main:has(article[class*="h-[175px]"]) > div.mx-auto.w-full.max-w-xl.px-4.pb-28.pt-\[82px\] > div.space-y-3 > section:first-child {
+    position: fixed !important;
+    z-index: 50 !important;
+    top: 12px !important;
+    left: 16px !important;
+    right: 112px !important;
+    margin: 0 !important;
+    padding: 0 !important;
+    border: 0 !important;
+    background: transparent !important;
+    box-shadow: none !important;
+  }
+
+  main:has(article[class*="h-[175px]"]) > div.mx-auto.w-full.max-w-xl.px-4.pb-28.pt-\[82px\] > div.space-y-3 > section:first-child > button {
+    width: 100% !important;
+    height: 48px !important;
+    border-radius: 16px !important;
+  }
+}
