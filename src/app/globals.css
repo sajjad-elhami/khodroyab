@@ -67,4 +67,14 @@ div:has(> div.h-full.w-\[122px\]) img { width: 100% !important; height: 100% !im
     height: 48px !important;
     border-radius: 16px !important;
   }
+
+  /* Remove the three sort controls under vehicle search. */
+  main:has(article[class*="h-[175px]"]) > div.mx-auto.w-full.max-w-xl.px-4.pb-28.pt-\[82px\] > div.space-y-3 > section:first-child > div {
+    display: none !important;
+  }
+
+  /* Remove the "خودروهای موجود" heading while keeping the dealership label and count. */
+  main:has(article[class*="h-[175px]"]) > div.mx-auto.w-full.max-w-xl.px-4.pb-28.pt-\[82px\] > div.space-y-3 > div:has(> div > h1) h1 {
+    display: none !important;
+  }
 }
