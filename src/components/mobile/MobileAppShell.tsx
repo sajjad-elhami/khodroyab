@@ -139,9 +139,7 @@ export default function MobileAppShell({
   const [provinceSearch, setProvinceSearch] = useState("");
   const [activeProvinceId, setActiveProvinceId] = useState("");
 
-  const [localSelectedCityIds, setLocalSelectedCityIds] = useState<
-    string[]
-  >([]);
+  const [localSelectedCityIds, setLocalSelectedCityIds] = useState<string[]>([]);
 
   useEffect(() => {
     if (isVehicleHeader || !provinceOpen) return;
@@ -153,16 +151,12 @@ export default function MobileAppShell({
       const supabase = createClient();
 
       try {
-        const { provinces } = await getLocationCatalog(
-          supabase,
-        );
+        const { provinces } = await getLocationCatalog(supabase);
 
         if (cancelled) return;
-
         setLocalProvinces(provinces);
       } catch {
         if (cancelled) return;
-
         setLocalProvinces([]);
       }
     };
@@ -172,16 +166,10 @@ export default function MobileAppShell({
     return () => {
       cancelled = true;
     };
-  }, [
-    isVehicleHeader,
-    provinceOpen,
-    localProvinces.length,
-  ]);
+  }, [isVehicleHeader, provinceOpen, localProvinces.length]);
 
   useEffect(() => {
-    if (!isVehicleHeader || !provinceOpen || !activeProvinceId) {
-      return;
-    }
+    if (!isVehicleHeader || !provinceOpen || !activeProvinceId) return;
 
     let cancelled = false;
 
@@ -189,10 +177,7 @@ export default function MobileAppShell({
       const supabase = createClient();
 
       try {
-        const provinceCities = await getCitiesByProvince(
-          supabase,
-          activeProvinceId,
-        );
+        const provinceCities = await getCitiesByProvince(supabase, activeProvinceId);
 
         if (cancelled) return;
 
@@ -201,10 +186,7 @@ export default function MobileAppShell({
             (city) => city.province_id !== activeProvinceId,
           );
 
-          return [
-            ...otherProvinceCities,
-            ...provinceCities,
-          ];
+          return [...otherProvinceCities, ...provinceCities];
         });
       } catch {
         if (cancelled) return;
@@ -216,11 +198,7 @@ export default function MobileAppShell({
     return () => {
       cancelled = true;
     };
-  }, [
-    isVehicleHeader,
-    provinceOpen,
-    activeProvinceId,
-  ]);
+  }, [isVehicleHeader, provinceOpen, activeProvinceId]);
 
   const provinces = vehicleHeader?.provinces ?? localProvinces;
   const cities =
@@ -233,21 +211,14 @@ export default function MobileAppShell({
     : localSelectedCityIds;
 
   const activeProvince = useMemo(
-    () =>
-      provinces.find(
-        (province) => province.id === activeProvinceId
-      ),
-    [provinces, activeProvinceId]
+    () => provinces.find((province) => province.id === activeProvinceId),
+    [provinces, activeProvinceId],
   );
 
   const filteredProvinces = useMemo(() => {
     const query = provinceSearch.trim();
-
     if (!query) return provinces;
-
-    return provinces.filter((province) =>
-      province.name.includes(query)
-    );
+    return provinces.filter((province) => province.name.includes(query));
   }, [provinces, provinceSearch]);
 
   const filteredCities = useMemo(() => {
@@ -256,12 +227,8 @@ export default function MobileAppShell({
     const query = provinceSearch.trim();
 
     return cities.filter((city) => {
-      if (city.province_id !== activeProvinceId) {
-        return false;
-      }
-
+      if (city.province_id !== activeProvinceId) return false;
       if (!query) return true;
-
       return city.name.includes(query);
     });
   }, [cities, activeProvinceId, provinceSearch]);
@@ -272,14 +239,12 @@ export default function MobileAppShell({
 
     for (const province of provinces) {
       const provinceCities = cities.filter(
-        (city) => city.province_id === province.id
+        (city) => city.province_id === province.id,
       );
 
       if (
         provinceCities.length > 0 &&
-        provinceCities.every((city) =>
-          selectedSet.has(city.id)
-        )
+        provinceCities.every((city) => selectedSet.has(city.id))
       ) {
         result.add(province.id);
       }
@@ -294,20 +259,13 @@ export default function MobileAppShell({
     return cities.filter(
       (city) =>
         selectedSet.has(city.id) &&
-        !fullySelectedProvinceIds.has(city.province_id)
+        !fullySelectedProvinceIds.has(city.province_id),
     );
-  }, [
-    cities,
-    selectedCityIds,
-    fullySelectedProvinceIds,
-  ]);
+  }, [cities, selectedCityIds, fullySelectedProvinceIds]);
 
   const selectedAllProvinces = useMemo(
-    () =>
-      provinces.filter((province) =>
-        fullySelectedProvinceIds.has(province.id)
-      ),
-    [provinces, fullySelectedProvinceIds]
+    () => provinces.filter((province) => fullySelectedProvinceIds.has(province.id)),
+    [provinces, fullySelectedProvinceIds],
   );
 
   const selectedCitiesInActiveProvince = useMemo(() => {
@@ -315,34 +273,26 @@ export default function MobileAppShell({
 
     const provinceCityIds = new Set(
       cities
-        .filter(
-          (city) => city.province_id === activeProvinceId
-        )
-        .map((city) => city.id)
+        .filter((city) => city.province_id === activeProvinceId)
+        .map((city) => city.id),
     );
 
-    return selectedCityIds.filter((id) =>
-      provinceCityIds.has(id)
-    );
+    return selectedCityIds.filter((id) => provinceCityIds.has(id));
   }, [cities, activeProvinceId, selectedCityIds]);
 
   const activeProvinceCityIds = useMemo(
     () =>
       cities
-        .filter(
-          (city) => city.province_id === activeProvinceId
-        )
+        .filter((city) => city.province_id === activeProvinceId)
         .map((city) => city.id),
-    [cities, activeProvinceId]
+    [cities, activeProvinceId],
   );
 
   const allCitiesInActiveProvinceSelected =
     activeProvinceId !== "" &&
     (fullySelectedProvinceIds.has(activeProvinceId) ||
       (activeProvinceCityIds.length > 0 &&
-        activeProvinceCityIds.every((id) =>
-          selectedCityIds.includes(id)
-        )));
+        activeProvinceCityIds.every((id) => selectedCityIds.includes(id))));
 
   function updateSelectedCityIds(nextIds: string[]) {
     const uniqueIds = Array.from(new Set(nextIds));
@@ -361,14 +311,10 @@ export default function MobileAppShell({
   }
 
   function removeProvinceSelection(provinceId: string) {
-    const provinceCityIds = new Set(
-      getProvinceCityIds(provinceId)
-    );
+    const provinceCityIds = new Set(getProvinceCityIds(provinceId));
 
     updateSelectedCityIds(
-      selectedCityIds.filter(
-        (id) => !provinceCityIds.has(id)
-      )
+      selectedCityIds.filter((id) => !provinceCityIds.has(id)),
     );
   }
 
@@ -387,47 +333,30 @@ export default function MobileAppShell({
 
   function toggleCity(city: City) {
     if (selectedCityIds.includes(city.id)) {
-      updateSelectedCityIds(
-        selectedCityIds.filter(
-          (id) => id !== city.id
-        )
-      );
+      updateSelectedCityIds(selectedCityIds.filter((id) => id !== city.id));
       return;
     }
 
-    updateSelectedCityIds([
-      ...selectedCityIds,
-      city.id,
-    ]);
+    updateSelectedCityIds([...selectedCityIds, city.id]);
   }
 
   function toggleAllCitiesInProvince() {
     if (!activeProvinceId) return;
 
-    const provinceCityIds =
-      getProvinceCityIds(activeProvinceId);
-
+    const provinceCityIds = getProvinceCityIds(activeProvinceId);
     const selectedSet = new Set(selectedCityIds);
 
     const allSelected =
       provinceCityIds.length > 0 &&
-      provinceCityIds.every((id) =>
-        selectedSet.has(id)
-      );
+      provinceCityIds.every((id) => selectedSet.has(id));
 
     if (allSelected) {
-      provinceCityIds.forEach((id) =>
-        selectedSet.delete(id)
-      );
+      provinceCityIds.forEach((id) => selectedSet.delete(id));
     } else {
-      provinceCityIds.forEach((id) =>
-        selectedSet.add(id)
-      );
+      provinceCityIds.forEach((id) => selectedSet.add(id));
     }
 
-    updateSelectedCityIds(
-      Array.from(selectedSet)
-    );
+    updateSelectedCityIds(Array.from(selectedSet));
   }
 
   function confirmCities() {
@@ -450,16 +379,21 @@ export default function MobileAppShell({
     setProvinceOpen(false);
   }
 
+  function openVehicleSearch() {
+    const searchButton = document.querySelector<HTMLButtonElement>(
+      'main > div > div.space-y-3 > section:first-child > button:first-child',
+    );
+
+    searchButton?.click();
+  }
+
   const headerLocationLabel =
     selectedCityIds.length > 0
       ? `${faNumber.format(selectedCityIds.length)} شهر`
       : "استان";
 
   return (
-    <main
-      dir="rtl"
-      className="min-h-screen bg-[#f6f7f9] text-gray-950"
-    >
+    <main dir="rtl" className="min-h-screen bg-[#f6f7f9] text-gray-950">
       <header className="fixed inset-x-0 top-0 z-40 border-b border-gray-100 bg-white/95 shadow-sm backdrop-blur-xl">
         <div className="mx-auto w-full max-w-xl px-4 pb-3 pt-3">
           <div className="flex items-center gap-2">
@@ -469,46 +403,19 @@ export default function MobileAppShell({
               className="flex h-12 shrink-0 items-center gap-1.5 rounded-2xl border border-gray-200 bg-gray-50 px-3 text-sm font-bold text-gray-800 active:scale-[0.98]"
             >
               <span className="text-base">⌖</span>
-
-              <span className="max-w-[100px] truncate">
-                {headerLocationLabel}
-              </span>
-
-              <span className="text-xs text-gray-400">
-                ⌄
-              </span>
+              <span className="max-w-[100px] truncate">{headerLocationLabel}</span>
+              <span className="text-xs text-gray-400">⌄</span>
             </button>
 
             {isVehicleHeader ? (
-              <div className="relative min-w-0 flex-1">
-                <span className="pointer-events-none absolute right-3 top-1/2 -translate-y-1/2 text-lg text-gray-400">
-                  ⌕
-                </span>
-
-                <input
-                  value={vehicleHeader?.search ?? ""}
-                  onChange={(event) =>
-                    vehicleHeader?.onSearchChange?.(
-                      event.target.value
-                    )
-                  }
-                  placeholder="جستجوی خودرو..."
-                  className="h-12 w-full rounded-2xl bg-gray-100 px-10 text-right text-[16px] text-gray-900 outline-none placeholder:text-gray-400 focus:bg-gray-50"
-                />
-
-                {(vehicleHeader?.search ?? "").trim() && (
-                  <button
-                    type="button"
-                    onClick={() =>
-                      vehicleHeader?.onSearchChange?.("")
-                    }
-                    className="absolute left-2 top-1/2 flex h-8 w-8 -translate-y-1/2 items-center justify-center rounded-full bg-white text-sm text-gray-400 shadow-sm"
-                    aria-label="پاک کردن جستجو"
-                  >
-                    ×
-                  </button>
-                )}
-              </div>
+              <button
+                type="button"
+                onClick={openVehicleSearch}
+                className="flex h-12 min-w-0 flex-1 items-center gap-2 rounded-2xl bg-gray-100 px-4 text-right text-[16px] text-gray-400 active:bg-gray-50"
+              >
+                <span className="text-lg">⌕</span>
+                <span className="truncate">جستجوی خودرو...</span>
+              </button>
             ) : (
               <button
                 type="button"
@@ -516,10 +423,7 @@ export default function MobileAppShell({
                 className="flex h-12 min-w-0 flex-1 items-center gap-2 rounded-2xl bg-gray-100 px-4 text-right text-sm text-gray-400"
               >
                 <span className="text-lg">⌕</span>
-
-                <span className="truncate">
-                  جستجو در شهرهای ایران
-                </span>
+                <span className="truncate">جستجو در شهرهای ایران</span>
               </button>
             )}
           </div>
@@ -535,8 +439,7 @@ export default function MobileAppShell({
           {navItems.map((item) => {
             const active =
               pathname === item.href ||
-              (item.href !== "/favorites" &&
-                pathname.startsWith(`${item.href}/`));
+              (item.href !== "/favorites" && pathname.startsWith(`${item.href}/`));
 
             return (
               <Link
@@ -554,7 +457,6 @@ export default function MobileAppShell({
                 >
                   <NavIcon name={item.icon} active={active} />
                 </span>
-
                 <span
                   className={`whitespace-nowrap text-[10px] leading-4 tracking-[-0.1px] ${
                     active
@@ -564,7 +466,6 @@ export default function MobileAppShell({
                 >
                   {item.label}
                 </span>
-
               </Link>
             );
           })}
@@ -577,12 +478,8 @@ export default function MobileAppShell({
             <div className="flex shrink-0 items-center justify-between border-b border-gray-100 px-5 pb-4 pt-5">
               <div>
                 <h2 className="text-lg font-extrabold text-gray-950">
-                  {locationMode === "province"
-                    ? "انتخاب موقعیت"
-                    : activeProvince?.name ||
-                      "انتخاب شهر"}
+                  {locationMode === "province" ? "انتخاب موقعیت" : activeProvince?.name || "انتخاب شهر"}
                 </h2>
-
                 <p className="mt-1 text-xs text-gray-400">
                   {locationMode === "province"
                     ? "استان موردنظر را انتخاب کنید"
@@ -592,9 +489,7 @@ export default function MobileAppShell({
 
               <button
                 type="button"
-                onClick={() =>
-                  setProvinceOpen(false)
-                }
+                onClick={() => setProvinceOpen(false)}
                 className="flex h-10 w-10 items-center justify-center rounded-full bg-gray-100 text-xl text-gray-600"
               >
                 ×
@@ -603,90 +498,61 @@ export default function MobileAppShell({
 
             <div className="shrink-0 p-4">
               <div className="flex h-12 items-center gap-2 rounded-2xl bg-gray-100 px-4">
-                <span className="text-lg text-gray-400">
-                  ⌕
-                </span>
-
+                <span className="text-lg text-gray-400">⌕</span>
                 <input
                   value={provinceSearch}
-                  onChange={(event) =>
-                    setProvinceSearch(
-                      event.target.value
-                    )
-                  }
-                  placeholder={
-                    locationMode === "province"
-                      ? "جستجوی استان"
-                      : "جستجوی شهر"
-                  }
+                  onChange={(event) => setProvinceSearch(event.target.value)}
+                  placeholder={locationMode === "province" ? "جستجوی استان" : "جستجوی شهر"}
                   className="min-w-0 flex-1 bg-transparent text-[16px] outline-none placeholder:text-gray-400"
                   autoFocus
                 />
               </div>
             </div>
 
-            {locationMode === "province" &&
-              selectedCityIds.length > 0 && (
-                <div className="shrink-0 px-4 pb-3">
-                  <div className="mb-2 text-[11px] font-bold text-gray-500">
-                    شهرهای انتخاب‌شده
-                  </div>
-
-                  <div className="flex flex-wrap gap-2">
-                    {selectedAllProvinces.map(
-                      (province) => (
-                        <div
-                          key={`province-${province.id}`}
-                          className="flex min-h-9 items-center gap-2 rounded-xl border border-red-200 bg-red-50 px-2.5 py-1.5"
-                        >
-                          <span className="text-xs font-bold text-red-700">
-                            کل شهرهای {province.name}
-                          </span>
-
-                          <button
-                            type="button"
-                            onClick={() =>
-                              removeProvinceSelection(
-                                province.id
-                              )
-                            }
-                            className="flex h-6 w-6 shrink-0 items-center justify-center rounded-full text-base font-bold leading-none text-red-500 active:bg-red-100"
-                            aria-label={`حذف کل شهرهای ${province.name}`}
-                          >
-                            ×
-                          </button>
-                        </div>
-                      )
-                    )}
-
-                    {selectedCities.map((city) => (
-                      <div
-                        key={`city-${city.id}`}
-                        className="flex min-h-9 items-center gap-2 rounded-xl border border-red-200 bg-red-50 px-2.5 py-1.5"
+            {locationMode === "province" && selectedCityIds.length > 0 && (
+              <div className="shrink-0 px-4 pb-3">
+                <div className="mb-2 text-[11px] font-bold text-gray-500">شهرهای انتخاب‌شده</div>
+                <div className="flex flex-wrap gap-2">
+                  {selectedAllProvinces.map((province) => (
+                    <div
+                      key={`province-${province.id}`}
+                      className="flex min-h-9 items-center gap-2 rounded-xl border border-red-200 bg-red-50 px-2.5 py-1.5"
+                    >
+                      <span className="text-xs font-bold text-red-700">کل شهرهای {province.name}</span>
+                      <button
+                        type="button"
+                        onClick={() => removeProvinceSelection(province.id)}
+                        className="flex h-6 w-6 shrink-0 items-center justify-center rounded-full text-base font-bold leading-none text-red-500 active:bg-red-100"
+                        aria-label={`حذف کل شهرهای ${province.name}`}
                       >
-                        <span className="text-xs font-bold text-red-700">
-                          {city.name}
-                        </span>
+                        ×
+                      </button>
+                    </div>
+                  ))}
 
-                        <button
-                          type="button"
-                          onClick={() =>
-                            updateSelectedCityIds(
-                              selectedCityIds.filter(
-                                (id) => id !== city.id
-                              )
-                            )
-                          }
-                          className="flex h-6 w-6 shrink-0 items-center justify-center rounded-full text-base font-bold leading-none text-red-500 active:bg-red-100"
-                          aria-label={`حذف ${city.name}`}
-                        >
-                          ×
-                        </button>
-                      </div>
-                    ))}
-                  </div>
+                  {selectedCities.map((city) => (
+                    <div
+                      key={`city-${city.id}`}
+                      className="flex min-h-9 items-center gap-2 rounded-xl border border-red-200 bg-red-50 px-2.5 py-1.5"
+                    >
+                      <span className="text-xs font-bold text-red-700">{city.name}</span>
+                      <button
+                        type="button"
+                        onClick={() =>
+                          updateSelectedCityIds(
+                            selectedCityIds.filter((id) => id !== city.id),
+                          )
+                        }
+                        className="flex h-6 w-6 shrink-0 items-center justify-center rounded-full text-base font-bold leading-none text-red-500 active:bg-red-100"
+                        aria-label={`حذف ${city.name}`}
+                      >
+                        ×
+                      </button>
+                    </div>
+                  ))}
                 </div>
-              )}
+              </div>
+            )}
 
             <div className="min-h-0 flex-1 overflow-y-auto px-4">
               {locationMode === "province" ? (
@@ -696,10 +562,7 @@ export default function MobileAppShell({
                     onClick={clearLocation}
                     className="flex w-full items-center justify-between rounded-2xl border border-gray-100 bg-gray-50 px-4 py-4 text-right active:bg-gray-100"
                   >
-                    <span className="text-sm font-bold text-gray-800">
-                      همه ایران
-                    </span>
-
+                    <span className="text-sm font-bold text-gray-800">همه ایران</span>
                     <span
                       className={`flex h-6 w-6 items-center justify-center rounded-md border-2 ${
                         selectedCityIds.length === 0
@@ -718,20 +581,13 @@ export default function MobileAppShell({
                       onClick={() => selectProvince(province)}
                       className="flex w-full items-center justify-between rounded-2xl border border-gray-100 bg-white px-4 py-4 text-right active:bg-gray-50"
                     >
-                      <span className="text-sm font-bold text-gray-800">
-                        {province.name}
-                      </span>
-
-                      <span className="text-lg font-bold text-gray-400">
-                        &gt;
-                      </span>
+                      <span className="text-sm font-bold text-gray-800">{province.name}</span>
+                      <span className="text-lg font-bold text-gray-400">&gt;</span>
                     </button>
                   ))}
 
                   {filteredProvinces.length === 0 && (
-                    <div className="py-10 text-center text-sm text-gray-400">
-                      استانی پیدا نشد
-                    </div>
+                    <div className="py-10 text-center text-sm text-gray-400">استانی پیدا نشد</div>
                   )}
                 </div>
               ) : (
@@ -746,7 +602,6 @@ export default function MobileAppShell({
                     className="mb-3 flex w-full items-center justify-between rounded-2xl border border-gray-100 bg-gray-50 px-4 py-3.5 text-right text-sm font-bold text-gray-700"
                   >
                     <span>← تغییر استان</span>
-
                     <span>{activeProvince?.name || "استان"}</span>
                   </button>
 
@@ -755,10 +610,7 @@ export default function MobileAppShell({
                     onClick={toggleAllCitiesInProvince}
                     className="flex w-full items-center justify-between rounded-2xl border border-gray-100 bg-gray-50 px-4 py-4 text-right active:bg-gray-100"
                   >
-                    <span className="text-sm font-bold text-gray-800">
-                      همه شهرهای {activeProvince?.name || ""}
-                    </span>
-
+                    <span className="text-sm font-bold text-gray-800">همه شهرهای {activeProvince?.name || ""}</span>
                     <span
                       className={`flex h-6 w-6 shrink-0 items-center justify-center rounded-md border-2 ${
                         allCitiesInActiveProvinceSelected
@@ -781,10 +633,7 @@ export default function MobileAppShell({
                           onClick={() => toggleCity(city)}
                           className="flex w-full items-center justify-between rounded-2xl border border-gray-100 bg-white px-4 py-4 text-right active:bg-gray-50"
                         >
-                          <span className="text-sm font-bold text-gray-800">
-                            {city.name}
-                          </span>
-
+                          <span className="text-sm font-bold text-gray-800">{city.name}</span>
                           <span
                             className={`flex h-6 w-6 shrink-0 items-center justify-center rounded-md border-2 ${
                               active
@@ -800,9 +649,7 @@ export default function MobileAppShell({
                   </div>
 
                   {filteredCities.length === 0 && (
-                    <div className="py-10 text-center text-sm text-gray-400">
-                      شهری پیدا نشد
-                    </div>
+                    <div className="py-10 text-center text-sm text-gray-400">شهری پیدا نشد</div>
                   )}
                 </div>
               )}
