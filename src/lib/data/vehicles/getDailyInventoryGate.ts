@@ -8,25 +8,34 @@ export type DailyInventoryGate = {
   confirmedToday: number;
 };
 
-function getTehranTodayCutoffIso() {
+function getTehranBusinessDayCutoff() {
   const now = new Date();
-  const tehranParts = new Intl.DateTimeFormat("en-US", {
+  const formatter = new Intl.DateTimeFormat("en-US", {
     timeZone: "Asia/Tehran",
     year: "numeric",
     month: "2-digit",
     day: "2-digit",
-  }).formatToParts(now);
+    hour: "2-digit",
+    minute: "2-digit",
+    hour12: false,
+  });
+  const parts = formatter.formatToParts(now);
+  const get = (type: string) => parts.find((part) => part.type === type)?.value;
 
-  const year = tehranParts.find((part) => part.type === "year")?.value;
-  const month = tehranParts.find((part) => part.type === "month")?.value;
-  const day = tehranParts.find((part) => part.type === "day")?.value;
+  const year = get("year");
+  const month = get("month");
+  const day = get("day");
+  const hour = Number(get("hour") ?? "0");
+  const minute = Number(get("minute") ?? "0");
 
   if (!year || !month || !day) {
     throw new Error("Unable to determine Tehran date.");
   }
 
-  // The business day starts at 07:00 Tehran time.
-  return new Date(`${year}-${month}-${day}T07:00:00+03:30`).toISOString();
+  // Before 07:00 Tehran time, the previous confirmation is still valid.
+  if (hour < 7 || (hour === 7 && minute < 0)) return null;
+
+  return new Date(`${year}-${month}-${day}T07:00:00+03:30`);
 }
 
 export async function getDailyInventoryGate(
@@ -73,11 +82,23 @@ export async function getDailyInventoryGate(
   }
 
   const totalAvailable = vehicles?.length ?? 0;
-  const cutoffIso = getTehranTodayCutoffIso();
+  const cutoff = getTehranBusinessDayCutoff();
+
+  if (!cutoff) {
+    return {
+      isAdmin,
+      dealershipId,
+      requiresUpdate: false,
+      totalAvailable,
+      confirmedToday: totalAvailable,
+    };
+  }
+
+  const cutoffMs = cutoff.getTime();
   const confirmedToday = (vehicles ?? []).filter(
     (vehicle) =>
       Boolean(vehicle.inventory_confirmed_at) &&
-      new Date(vehicle.inventory_confirmed_at).getTime() >= new Date(cutoffIso).getTime(),
+      new Date(vehicle.inventory_confirmed_at).getTime() >= cutoffMs,
   ).length;
 
   return {
