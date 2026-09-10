@@ -58,6 +58,7 @@ type Vehicle = {
   province_name: string | null;
   city_name: string | null;
   image_url: string | null;
+  created_at: string | null;
 };
 
 const PAGE_SIZE = 12;
@@ -90,6 +91,30 @@ function formatPrice(value: number | null) {
     .replace(/٬/g, "/");
 
   return `${formatted} تومان`;
+}
+
+function formatRelativeListingTime(value: string | null) {
+  if (!value) return "";
+
+  const createdAt = new Date(value).getTime();
+  if (!Number.isFinite(createdAt)) return "";
+
+  const diffMinutes = Math.max(1, Math.floor((Date.now() - createdAt) / 60000));
+
+  if (diffMinutes < 60) {
+    if (diffMinutes < 45) {
+      return `${diffMinutes.toLocaleString("fa-IR")} دقیقه پیش`;
+    }
+    return "نیم ساعت پیش";
+  }
+
+  const diffHours = Math.floor(diffMinutes / 60);
+  if (diffHours < 24) {
+    return `${diffHours.toLocaleString("fa-IR")} ساعت پیش`;
+  }
+
+  const diffDays = Math.floor(diffHours / 24);
+  return `${diffDays.toLocaleString("fa-IR")} روز پیش`;
 }
 
 function getStatusLabel(status: string) {
@@ -1853,7 +1878,7 @@ export default function VehiclesClient({
                       className="flex h-full flex-row-reverse"
                     >
                       {/* Image — physically LEFT */}
-                      <div className="h-full w-[122px] shrink-0 overflow-hidden bg-gray-100">
+                      <div className="h-full w-[122px] shrink-0 overflow-hidden rounded-2xl bg-gray-100">
                         {vehicle.image_url ? (
                           <img
                             src={vehicle.image_url}
@@ -1877,24 +1902,18 @@ export default function VehiclesClient({
                               مدل {formatYear(vehicle.model_year)}
                             </span>
                           )}
+                          {vehicle.color && (
+                            <span className="mr-1">/ {vehicle.color}</span>
+                          )}
                         </h2>
 
-                        <div className="mt-1.5 flex min-w-0 items-center gap-1.5 overflow-hidden text-[11px] text-gray-500">
-                          <span className="shrink-0">
-                            {vehicle.mileage !== null
-                              ? `${formatNumber(vehicle.mileage)} کیلومتر`
-                              : "کارکرد نامشخص"}
-                          </span>
+                        <p className="mt-1.5 truncate text-[12px] font-medium leading-5 text-gray-500">
+                          {vehicle.mileage !== null
+                            ? `${formatNumber(vehicle.mileage)} کیلومتر`
+                            : "کارکرد نامشخص"}
+                        </p>
 
-                          {vehicle.color && (
-                            <>
-                              <span className="text-gray-300">•</span>
-                              <span className="truncate">{vehicle.color}</span>
-                            </>
-                          )}
-                        </div>
-
-                        <p className="mt-1.5 truncate text-[11px] font-medium leading-4 text-gray-500">
+                        <p className="mt-1 truncate text-[11px] font-medium leading-4 text-gray-500">
                           {formatPrice(vehicle.price)}
                         </p>
 
@@ -1904,12 +1923,13 @@ export default function VehiclesClient({
                             "ایران"}
                         </p>
 
-                        <div className="mt-1 flex min-w-0 items-center gap-2">
-                          <p className="min-w-0 truncate text-[10px] font-medium leading-4 text-gray-700">
-                            {vehicle.dealership_name || "نمایشگاه"}
-                          </p>
+                        <p className="mt-1 truncate text-[10px] font-medium leading-4 text-gray-700">
+                          {vehicle.dealership_name || "نمایشگاه"}
+                        </p>
 
-                        </div>
+                        <p className="mt-0.5 truncate text-[10px] font-medium leading-4 text-gray-400">
+                          {formatRelativeListingTime(vehicle.created_at)}
+                        </p>
                       </div>
                     </Link>
                   </article>

@@ -33,11 +33,11 @@ type Props = {
 };
 
 const navItems = [
-  { href: "/favorites", label: "نشان‌شده", icon: "bookmark" },
   { href: "/vehicles", label: "خودروها", icon: "car" },
+  { href: "/favorites", label: "نشان‌شده", icon: "bookmark" },
   { href: "/vehicles/new", label: "ثبت خودرو", icon: "plus" },
-  { href: "/dealerships", label: "نمایشگاه‌ها", icon: "store" },
-  { href: "/market-analysis", label: "تحلیل بازار", icon: "chart" },
+  { href: "/dealerships", label: "نمایشگاه من", icon: "store" },
+  { href: "/dashboard", label: "داشبورد", icon: "dashboard" },
 ];
 
 function NavIcon({
@@ -85,6 +85,17 @@ function NavIcon({
       <svg viewBox="0 0 24 24" className={className} aria-hidden="true">
         <rect {...common} x="4" y="4" width="16" height="16" rx="5" />
         <path {...common} d="M12 8v8M8 12h8" />
+      </svg>
+    );
+  }
+
+  if (name === "dashboard") {
+    return (
+      <svg viewBox="0 0 24 24" className={className} aria-hidden="true">
+        <rect {...common} x="4" y="4" width="6" height="6" rx="1.5" />
+        <rect {...common} x="14" y="4" width="6" height="6" rx="1.5" />
+        <rect {...common} x="4" y="14" width="6" height="6" rx="1.5" />
+        <rect {...common} x="14" y="14" width="6" height="6" rx="1.5" />
       </svg>
     );
   }
@@ -522,7 +533,7 @@ export default function MobileAppShell({
       </div>
 
       <nav className="fixed inset-x-0 bottom-0 z-40 border-t border-gray-100 bg-white/95 shadow-[0_-8px_30px_rgba(0,0,0,0.08)] backdrop-blur-xl">
-        <div className="mx-auto grid h-[76px] max-w-xl grid-cols-5 items-center px-2">
+        <div className="mx-auto grid h-[88px] max-w-xl grid-cols-5 items-center px-2">
           {navItems.map((item) => {
             const active =
               pathname === item.href ||
@@ -556,13 +567,6 @@ export default function MobileAppShell({
                   {item.label}
                 </span>
 
-                <span
-                  className={`mt-0.5 h-1 w-1 rounded-full transition-opacity ${
-                    active
-                      ? "bg-gray-950 opacity-100"
-                      : "opacity-0"
-                  }`}
-                />
               </Link>
             );
           })}
