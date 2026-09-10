@@ -60,9 +60,11 @@ export async function updateSession(request: NextRequest) {
     return NextResponse.redirect(url);
   }
 
+  // Authenticated users entering the login page should return to
+  // the vehicle inventory, which is now the app's default landing page.
   if (isAuthenticated && pathname === "/login") {
     const url = request.nextUrl.clone();
-    url.pathname = "/dashboard";
+    url.pathname = "/vehicles";
     url.search = "";
 
     return NextResponse.redirect(url);
