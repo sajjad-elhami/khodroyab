@@ -2,58 +2,45 @@ name: Update vehicle search brand model picker
 
 on:
   push:
-    branches: [main]
+    branches:
+      - main
 
 permissions:
   contents: write
 
 jobs:
   update:
-    if: github.event.head_commit.message != 'chore: update vehicle search brand model picker [bot]'
     runs-on: ubuntu-latest
     steps:
       - uses: actions/checkout@v4
 
       - name: Update search UI
+        env:
+          HEAD_MESSAGE: ${{ github.event.head_commit.message }}
         run: |
+          if [ "$HEAD_MESSAGE" = "chore: update vehicle search brand model picker [bot]" ]; then
+            echo "Already applied."
+            exit 0
+          fi
+
           python3 - <<'PY'
           from pathlib import Path
 
           path = Path('src/app/vehicles/VehiclesClient.tsx')
           text = path.read_text()
 
+          if 'VehicleBrandModelPicker' in text:
+              print('Picker already present.')
+              raise SystemExit(0)
+
           old_import = 'import MobileAppShell from "@/components/mobile/MobileAppShell";'
           new_import = old_import + '\nimport VehicleBrandModelPicker from "@/components/vehicles/VehicleBrandModelPicker";'
-          if 'VehicleBrandModelPicker' not in text:
-              text = text.replace(old_import, new_import, 1)
+          text = text.replace(old_import, new_import, 1)
 
-          old = '''                <section className="rounded-2xl border border-gray-200 bg-white p-3">
-                  <h3 className="mb-2 text-sm font-bold">
-                    برند و تیپ
-                  </h3>
+          start = text.index('                <section className="rounded-2xl border border-gray-200 bg-white p-3">\n                  <h3 className="mb-2 text-sm font-bold">\n                    برند و تیپ')
+          end = text.index('                </section>', start) + len('                </section>')
 
-                  <div className="space-y-2">
-                    <input
-                      value={brand}
-                      onChange={(e) =>
-                        handleFilterChange(setBrand, e.target.value)
-                      }
-                      placeholder="برند"
-                      className="h-12 w-full rounded-xl border border-gray-200 bg-gray-50 px-3 text-base outline-none"
-                    />
-
-                    <input
-                      value={model}
-                      onChange={(e) =>
-                        handleFilterChange(setModel, e.target.value)
-                      }
-                      placeholder="تیپ"
-                      className="h-12 w-full rounded-xl border border-gray-200 bg-gray-50 px-3 text-base outline-none"
-                    />
-                  </div>
-                </section>'''
-
-          new = '''                <section className="rounded-2xl border border-gray-200 bg-white p-3">
+          replacement = '''                <section className="rounded-2xl border border-gray-200 bg-white p-3">
                   <h3 className="mb-2 text-sm font-bold">
                     برند و مدل
                   </h3>
@@ -68,11 +55,9 @@ jobs:
                   />
                 </section>'''
 
-          if old not in text:
-              raise SystemExit('Expected old brand/model filter block was not found')
-
-          text = text.replace(old, new, 1)
+          text = text[:start] + replacement + text[end:]
           path.write_text(text)
+          print('Vehicle search UI updated.')
           PY
 
       - name: Commit changes
@@ -80,6 +65,9 @@ jobs:
           git config user.name "github-actions[bot]"
           git config user.email "41898282+github-actions[bot]@users.noreply.github.com"
           git add src/app/vehicles/VehiclesClient.tsx
-          git diff --cached --quiet && exit 0
+          if git diff --cached --quiet; then
+            echo "No changes to commit."
+            exit 0
+          fi
           git commit -m 'chore: update vehicle search brand model picker [bot]'
           git push
