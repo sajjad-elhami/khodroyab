@@ -45,6 +45,19 @@ nav.fixed.bottom-0 > div > a > span:first-child > svg {
   height: 23px !important;
 }
 
+nav.fixed.bottom-0 > div > a > span {
+  display: block !important;
+}
+
+nav.fixed.bottom-0 > div > a > span:last-child {
+  display: block !important;
+  visibility: visible !important;
+  opacity: 1 !important;
+  font-size: 11px !important;
+  line-height: 16px !important;
+  margin-top: 3px !important;
+}
+
 nav.fixed.bottom-0 > div > a > span:nth-child(2) {
   font-size: 11px !important;
 }
@@ -54,7 +67,15 @@ nav.fixed.bottom-0 > div > a.text-gray-950 span {
   color: #dc2626 !important;
 }
 
-/* Vehicle cards: give the text column enough vertical room for all metadata. */
+/* Vehicle cards: enough height for all metadata, including relative time. */
 div:has(> div.h-full.w-\[122px\]) {
-  height: 150px !important;
+  min-height: 175px !important;
+  height: 175px !important;
+}
+
+/* Fill the image frame edge-to-edge. */
+div:has(> div.h-full.w-\[122px\]) img {
+  width: 100% !important;
+  height: 100% !important;
+  object-fit: cover !important;
 }
