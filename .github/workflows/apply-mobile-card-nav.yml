@@ -1,0 +1,103 @@
+name: Apply mobile card and nav refinements
+
+on:
+  push:
+    branches: [main]
+  workflow_dispatch:
+
+permissions:
+  contents: write
+
+jobs:
+  apply:
+    if: ${{ !contains(github.event.head_commit.message, 'Apply mobile card and nav refinements') && !contains(github.event.head_commit.message, 'remove temporary mobile refinement workflow') }}
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+
+      - name: Apply exact UI changes
+        run: |
+          python3 - <<'PY'
+          from pathlib import Path
+
+          # ---------------- VehiclesClient ----------------
+          p = Path('src/app/vehicles/VehiclesClient.tsx')
+          s = p.read_text()
+
+          old = '  image_url: string | null;\n};'
+          new = '  image_url: string | null;\n  created_at: string | null;\n};'
+          if old not in s:
+              raise SystemExit('VehiclesClient: Vehicle type anchor not found')
+          s = s.replace(old, new, 1)
+
+          old = '''function formatPrice(value: number | null) {\n  if (value === null) return "توافقی";\n\n  const formatted = value\n    .toLocaleString("fa-IR")\n    .replace(/٬/g, "/");\n\n  return `${formatted} تومان`;\n}\n'''
+          new = old + '''\nfunction formatRelativeListingTime(value: string | null) {\n  if (!value) return "";\n\n  const createdAt = new Date(value).getTime();\n  if (!Number.isFinite(createdAt)) return "";\n\n  const diffMinutes = Math.max(1, Math.floor((Date.now() - createdAt) / 60000));\n\n  if (diffMinutes < 60) {\n    if (diffMinutes < 45) {\n      return `${diffMinutes.toLocaleString("fa-IR")} دقیقه پیش`;\n    }\n    return "نیم ساعت پیش";\n  }\n\n  const diffHours = Math.floor(diffMinutes / 60);\n  if (diffHours < 24) {\n    return `${diffHours.toLocaleString("fa-IR")} ساعت پیش`;\n  }\n\n  const diffDays = Math.floor(diffHours / 24);\n  return `${diffDays.toLocaleString("fa-IR")} روز پیش`;\n}\n'''
+          if old not in s:
+              raise SystemExit('VehiclesClient: formatPrice anchor not found')
+          s = s.replace(old, new, 1)
+
+          old = '<div className="h-full w-[122px] shrink-0 overflow-hidden bg-gray-100">'
+          new = '<div className="h-full w-[122px] shrink-0 overflow-hidden rounded-2xl bg-gray-100">'
+          if old not in s:
+              raise SystemExit('VehiclesClient: image frame anchor not found')
+          s = s.replace(old, new, 1)
+
+          old = '''                        <h2 className="truncate text-[15px] font-bold leading-5 text-gray-950">\n                          {vehicle.model}\n                          {vehicle.model_year !== null && (\n                            <span className="mr-1">\n                              مدل {formatYear(vehicle.model_year)}\n                            </span>\n                          )}\n                        </h2>\n\n                        <div className="mt-1.5 flex min-w-0 items-center gap-1.5 overflow-hidden text-[11px] text-gray-500">\n                          <span className="shrink-0">\n                            {vehicle.mileage !== null\n                              ? `${formatNumber(vehicle.mileage)} کیلومتر`\n                              : "کارکرد نامشخص"}\n                          </span>\n\n                          {vehicle.color && (\n                            <>\n                              <span className="text-gray-300">•</span>\n                              <span className="truncate">{vehicle.color}</span>\n                            </>\n                          )}\n                        </div>\n\n                        <p className="mt-1.5 truncate text-[11px] font-medium leading-4 text-gray-500">\n                          {formatPrice(vehicle.price)}\n                        </p>\n\n                        <p className="mt-1 truncate text-[11px] font-medium leading-4 text-gray-500">\n                          {vehicle.city_name ||\n                            vehicle.province_name ||\n                            "ایران"}\n                        </p>\n\n                        <div className="mt-1 flex min-w-0 items-center gap-2">\n                          <p className="min-w-0 truncate text-[10px] font-medium leading-4 text-gray-700">\n                            {vehicle.dealership_name || "نمایشگاه"}\n                          </p>\n\n                        </div>'''
+          new = '''                        <h2 className="truncate text-[15px] font-bold leading-5 text-gray-950">\n                          {vehicle.model}\n                          {vehicle.model_year !== null && (\n                            <span className="mr-1">\n                              مدل {formatYear(vehicle.model_year)}\n                            </span>\n                          )}\n                          {vehicle.color && (\n                            <span className="mr-1">/ {vehicle.color}</span>\n                          )}\n                        </h2>\n\n                        <p className="mt-1.5 truncate text-[12px] font-medium leading-5 text-gray-500">\n                          {vehicle.mileage !== null\n                            ? `${formatNumber(vehicle.mileage)} کیلومتر`\n                            : "کارکرد نامشخص"}\n                        </p>\n\n                        <p className="mt-1 truncate text-[11px] font-medium leading-4 text-gray-500">\n                          {formatPrice(vehicle.price)}\n                        </p>\n\n                        <p className="mt-1 truncate text-[11px] font-medium leading-4 text-gray-500">\n                          {vehicle.city_name ||\n                            vehicle.province_name ||\n                            "ایران"}\n                        </p>\n\n                        <p className="mt-1 truncate text-[10px] font-medium leading-4 text-gray-700">\n                          {vehicle.dealership_name || "نمایشگاه"}\n                        </p>\n\n                        <p className="mt-0.5 truncate text-[10px] font-medium leading-4 text-gray-400">\n                          {formatRelativeListingTime(vehicle.created_at)}\n                        </p>'''
+          if old not in s:
+              raise SystemExit('VehiclesClient: card information block not found')
+          s = s.replace(old, new, 1)
+
+          p.write_text(s)
+
+          # ---------------- MobileAppShell ----------------
+          p = Path('src/components/mobile/MobileAppShell.tsx')
+          s = p.read_text()
+
+          old = '''const navItems = [\n  { href: "/favorites", label: "نشان‌شده", icon: "bookmark" },\n  { href: "/vehicles", label: "خودروها", icon: "car" },\n  { href: "/vehicles/new", label: "ثبت خودرو", icon: "plus" },\n  { href: "/dealerships", label: "نمایشگاه‌ها", icon: "store" },\n  { href: "/market-analysis", label: "تحلیل بازار", icon: "chart" },\n];'''
+          new = '''const navItems = [\n  { href: "/vehicles", label: "خودروها", icon: "car" },\n  { href: "/favorites", label: "نشان‌شده", icon: "bookmark" },\n  { href: "/vehicles/new", label: "ثبت خودرو", icon: "plus" },\n  { href: "/dealerships", label: "نمایشگاه من", icon: "store" },\n  { href: "/dashboard", label: "داشبورد", icon: "dashboard" },\n];'''
+          if old not in s:
+              raise SystemExit('MobileAppShell: navItems anchor not found')
+          s = s.replace(old, new, 1)
+
+          marker = '''  if (name === "store") {\n    return ('''
+          dashboard = '''  if (name === "dashboard") {\n    return (\n      <svg viewBox="0 0 24 24" className={className} aria-hidden="true">\n        <rect {...common} x="4" y="4" width="6" height="6" rx="1.5" />\n        <rect {...common} x="14" y="4" width="6" height="6" rx="1.5" />\n        <rect {...common} x="4" y="14" width="6" height="6" rx="1.5" />\n        <rect {...common} x="14" y="14" width="6" height="6" rx="1.5" />\n      </svg>\n    );\n  }\n\n'''
+          if marker not in s:
+              raise SystemExit('MobileAppShell: store icon anchor not found')
+          s = s.replace(marker, dashboard + marker, 1)
+
+          s = s.replace('className="h-[21px] w-[21px]"', 'className="h-[23px] w-[23px]"')
+          s = s.replace('<div className="mx-auto grid h-[76px] max-w-xl grid-cols-5 items-center px-2">', '<div className="mx-auto grid h-[88px] max-w-xl grid-cols-5 items-center px-2">')
+
+          dot = '''                <span\n                  className={`mt-0.5 h-1 w-1 rounded-full transition-opacity ${\n                    active\n                      ? "bg-gray-950 opacity-100"\n                      : "opacity-0"\n                  }`}\n                />\n'''
+          if dot not in s:
+              raise SystemExit('MobileAppShell: active dot block not found')
+          s = s.replace(dot, '', 1)
+
+          p.write_text(s)
+
+          # ---------------- globals.css ----------------
+          p = Path('src/app/globals.css')
+          s = p.read_text()
+          s = s.replace('nav.fixed.bottom-0 > div > a[href="/market-analysis"] { order: 5; }\n', '')
+          s = s.replace('nav.fixed.bottom-0 > div > a[href="/vehicles/new"] { order: 3; }\nnav.fixed.bottom-0 > div > a[href="/dealerships"] { order: 4; }\n', 'nav.fixed.bottom-0 > div > a[href="/vehicles/new"] { order: 3; }\nnav.fixed.bottom-0 > div > a[href="/dealerships"] { order: 4; }\nnav.fixed.bottom-0 > div > a[href="/dashboard"] { order: 5; }\n')
+          p.write_text(s)
+          PY
+
+      - name: Commit changes
+        run: |
+          git config user.name "github-actions[bot]"
+          git config user.email "41898282+github-actions[bot]@users.noreply.github.com"
+          git add src/app/vehicles/VehiclesClient.tsx src/components/mobile/MobileAppShell.tsx src/app/globals.css
+          git diff --cached --check
+          git diff --cached --quiet && exit 0
+          git commit -m "Apply mobile card and nav refinements"
+          git push
+
+      - name: Remove temporary workflow
+        if: ${{ success() }}
+        run: |
+          rm -f .github/workflows/apply-mobile-card-nav.yml
+          git add .github/workflows/apply-mobile-card-nav.yml
+          git commit -m "chore: remove temporary mobile refinement workflow [skip ci]" || true
+          git push || true
