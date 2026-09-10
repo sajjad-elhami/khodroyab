@@ -88,8 +88,10 @@ export default function VehicleBodyInspection({ parts, value, onChange }: Props)
   return (
     <section dir="rtl" className="rounded-2xl border border-slate-200 bg-white shadow-sm">
       <div className="border-b border-slate-200 p-5 sm:p-6">
-        <p className="text-xs font-bold text-blue-600">کارشناسی خودرو</p>
-        <h2 className="mt-1 text-xl font-extrabold text-slate-950">کارشناسی بدنه و شاسی</h2>
+        <p className="text-xs font-bold text-blue-600">
+          کارشناسی بدنه <span className="text-red-500">*</span>
+        </p>
+        <h2 className="mt-1 text-xl font-extrabold text-slate-950">وضعیت بدنه</h2>
         <p className="mt-1 text-sm text-slate-500">
           در صورت نیاز روی قسمت مورد نظر خودرو کلیک و وضعیت آن را ثبت کنید.
         </p>
