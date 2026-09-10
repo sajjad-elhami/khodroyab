@@ -1,0 +1,121 @@
+name: Apply vehicles header cleanup
+
+on:
+  push:
+    branches: [main]
+
+permissions:
+  contents: write
+
+jobs:
+  cleanup:
+    if: github.actor != 'github-actions[bot]'
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+        with:
+          fetch-depth: 0
+
+      - name: Update vehicles header
+        shell: python
+        run: |
+          from pathlib import Path
+
+          path = Path('src/app/vehicles/VehiclesClient.tsx')
+          text = path.read_text(encoding='utf-8')
+
+          old = '''          <div className="mt-2 flex items-center gap-2 overflow-x-auto">
+            <button
+              type="button"
+              onClick={() => handleFilterChange(setSort, "newest")}
+              className={`shrink-0 rounded-full px-3 py-1.5 text-[11px] font-bold ${
+                sort === "newest"
+                  ? "bg-gray-950 text-white"
+                  : "bg-gray-100 text-gray-500"
+              }`}
+            >
+              جدیدترین
+            </button>
+
+            <button
+              type="button"
+              onClick={() => handleFilterChange(setSort, "price_asc")}
+              className={`shrink-0 rounded-full px-3 py-1.5 text-[11px] font-bold ${
+                sort === "price_asc"
+                  ? "bg-gray-950 text-white"
+                  : "bg-gray-100 text-gray-500"
+              }`}
+            >
+              ارزان‌ترین
+            </button>
+
+            <button
+              type="button"
+              onClick={() => handleFilterChange(setSort, "price_desc")}
+              className={`shrink-0 rounded-full px-3 py-1.5 text-[11px] font-bold ${
+                sort === "price_desc"
+                  ? "bg-gray-950 text-white"
+                  : "bg-gray-100 text-gray-500"
+              }`}
+            >
+              گران‌ترین
+            </button>
+
+            <span className="mr-auto shrink-0 text-[11px] text-gray-400">
+              {loading
+                ? "در حال جستجو..."
+                : `${formatNumber(totalCount)} خودرو`}
+            </span>
+          </div>
+'''
+
+          if old not in text:
+              raise SystemExit('sort controls block not found')
+
+          text = text.replace(old, '')
+
+          old_title = '''        {/* Result title */}
+        <div className="flex items-center justify-between px-1">
+          <div>
+            <h1 className="text-[17px] font-extrabold tracking-[-0.01em] text-gray-950">
+              خودروهای موجود
+            </h1>
+
+            <p className="mt-1 text-[11px] font-medium leading-5 text-gray-400">
+              آگهی‌های ثبت‌شده توسط نمایشگاه‌ها
+            </p>
+          </div>
+
+          <span className="rounded-full bg-gray-100 px-2.5 py-1 text-[10px] font-bold text-gray-500">
+            {formatNumber(totalCount)} آگهی
+          </span>
+        </div>
+'''
+
+          new_title = '''        {/* Result title */}
+        <div className="flex items-center justify-between px-1">
+          <p className="text-[13px] font-semibold text-gray-500">
+            آگهی‌های ثبت‌شده توسط نمایشگاه‌ها
+          </p>
+
+          <span className="text-[12px] font-bold text-gray-500">
+            {formatNumber(totalCount)} آگهی
+          </span>
+        </div>
+'''
+
+          if old_title not in text:
+              raise SystemExit('result title block not found')
+
+          text = text.replace(old_title, new_title)
+          path.write_text(text, encoding='utf-8')
+
+      - name: Commit and remove workflow
+        shell: bash
+        run: |
+          git config user.name "github-actions[bot]"
+          git config user.email "41898282+github-actions[bot]@users.noreply.github.com"
+          rm -f .github/workflows/apply-vehicles-header-cleanup.yml
+          git add src/app/vehicles/VehiclesClient.tsx .github/workflows/apply-vehicles-header-cleanup.yml
+          git commit -m "fix: simplify vehicle listings header"
+          git push
