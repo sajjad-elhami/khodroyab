@@ -1,0 +1,113 @@
+name: Temporary registration polish
+
+on:
+  push:
+    branches: [main]
+
+permissions:
+  contents: write
+
+jobs:
+  patch:
+    if: github.actor != 'github-actions[bot]'
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+
+      - name: Patch registration UI without restoring old files
+        run: |
+          python3 - <<'PY'
+          from pathlib import Path
+          import re
+
+          path = Path('src/app/vehicles/new/NewVehicleClient.tsx')
+          s = path.read_text()
+
+          # Remove the old duplicate-detection feature completely.
+          s = re.sub(r'\ntype DuplicateVehicle = \{.*?\n\};\n', '\n', s, count=1, flags=re.S)
+          s = s.replace('  checkVehicleDuplicateAction,\n', '')
+          s = re.sub(r'\n  const \[duplicateVehicles, setDuplicateVehicles\] =\n    useState<DuplicateVehicle\[\]>\(\[\]\);\n  const \[duplicateChecking, setDuplicateChecking\] = useState\(false\);\n', '\n', s, count=1)
+          s = s.replace('    setDuplicateVehicles([]);\n', '')
+          s = re.sub(r'\n  async function checkVehicleDuplicates\(\) \{.*?\n  \}\n\n  useEffect\(\(\) => \{\n    const timer = window\.setTimeout\(\(\) => \{\n      checkVehicleDuplicates\(\);\n    \}, 600\);\n\n    return \(\) => window\.clearTimeout\(timer\);\n  \}, \[.*?\n  \]\);\n', '\n', s, count=1, flags=re.S)
+          s = re.sub(r'\n          \{!duplicateChecking && duplicateVehicles\.length > 0 && \(.*?\n          \)\}\n\n          <section', '\n          <section', s, count=1, flags=re.S)
+
+          # Make numeric formatting deterministic: Persian digits + U+066C thousands separator.
+          marker = 'type Props = {\n  initialData: NewVehiclePageData;\n};\n'
+          helper = '''\ntype Props = {\n  initialData: NewVehiclePageData;\n};\n\nfunction formatPersianInteger(value: string): string {\n  const digits = normalizeDigits(value).replace(/\\D/g, "");\n  if (!digits) return "";\n\n  const grouped = digits.replace(/\\B(?=(\\d{3})+(?!\\d))/g, "٬");\n  return grouped.replace(/\\d/g, (digit) => "۰۱۲۳۴۵۶۷۸۹"[Number(digit)]);\n}\n'''
+          if marker not in s:
+              raise SystemExit('Props marker not found; aborting to avoid an unsafe patch')
+          s = s.replace(marker, helper, 1)
+
+          # Remove the rounded human-readable price summary; the entered exact amount is authoritative.
+          s = re.sub(r'\n                  \{pickerOpen === "price" && price && \(\n                    <p className="mt-3 text-center text-\[14px\] font-bold text-gray-600">\n                      \{formatPriceUnit\(price\)\}\n                    </p>\n                  \)\}\n', '\n', s, count=1)
+          s = re.sub(r'\nfunction formatPriceUnit\(value: string\): string \{.*?\n\}\n', '\n', s, count=1, flags=re.S)
+
+          # Use the exact Persian grouping formatter in the picker and summary row.
+          old_picker = '''value={\n                      pickerOpen === "mileage"\n                        ? mileage\n                          ? Number(mileage).toLocaleString("fa-IR")\n                          : ""\n                        : price\n                          ? Number(price).toLocaleString("fa-IR")\n                          : ""\n                    }'''
+          new_picker = '''value={\n                      pickerOpen === "mileage"\n                        ? formatPersianInteger(mileage)\n                        : formatPersianInteger(price)\n                    }'''
+          if old_picker not in s:
+              raise SystemExit('numeric picker block not found; aborting')
+          s = s.replace(old_picker, new_picker, 1)
+
+          old_price_row = '''{price\n                    ? `${Number(\n                        price.replace(/[^0-9]/g, "") || 0\n                      ).toLocaleString("fa-IR")} تومان`\n                    : "انتخاب"}'''
+          new_price_row = '''{price ? `${formatPersianInteger(price)} تومان` : "انتخاب"}'''
+          if old_price_row not in s:
+              raise SystemExit('price summary row not found; aborting')
+          s = s.replace(old_price_row, new_price_row, 1)
+
+          old_mileage_row = '''{mileage\n                    ? `${Number(mileage).toLocaleString("fa-IR")} کیلومتر`\n                    : "انتخاب"}'''
+          new_mileage_row = '''{mileage ? `${formatPersianInteger(mileage)} کیلومتر` : "انتخاب"}'''
+          if old_mileage_row in s:
+              s = s.replace(old_mileage_row, new_mileage_row, 1)
+
+          # Replace the fragile custom-event back flow with a direct stage-aware handler.
+          s = s.replace('import { useRouter } from "next/navigation";\n', 'import { useRouter } from "next/navigation";\nimport KhodroyabChevronIcon from "@/components/vehicles/KhodroyabChevronIcon";\n', 1)
+          s = re.sub(r'\n  useEffect\(\(\) => \{\n    function handleRegistrationBack\(event: Event\) \{.*?\n  \}, \[\]\);\n', '\n', s, count=1, flags=re.S)
+
+          # Add one deterministic back handler inside the client component.
+          anchor = '  function openChassisPicker(target: "front" | "rear") {'
+          back_fn = '''  function goBackRegistrationStep() {\n    setError("");\n    if (pickerOpen) {\n      setPickerOpen(null);\n      setPickerSearch("");\n      return;\n    }\n\n    if (currentStep > 1) {\n      setCurrentStep((step) => step - 1);\n      return;\n    }\n\n    router.back();\n  }\n\n'''
+          if anchor not in s:
+              raise SystemExit('back-handler anchor not found; aborting')
+          s = s.replace(anchor, back_fn + anchor, 1)
+
+          # Header back button must go exactly one registration step back, not home.
+          old_header = '''<button\n              type="button"\n              aria-label="بازگشت به صفحه اصلی"\n              onClick={() => router.push("/")}\n              className="absolute right-0 flex h-9 w-9 items-center justify-center rounded-full text-gray-700 transition hover:bg-gray-50"\n            >\n              <svg\n                viewBox="0 0 24 24"\n                fill="none"\n                className="h-5 w-5"\n                aria-hidden="true"\n              >\n                <path\n                  d="M15 5l-7 7 7 7"\n                  stroke="currentColor"\n                  strokeWidth="1.8"\n                  strokeLinecap="round"\n                  strokeLinejoin="round"\n                />\n              </svg>\n            </button>'''
+          new_header = '''<button\n              type="button"\n              aria-label="مرحله قبل"\n              onClick={goBackRegistrationStep}\n              className="absolute right-0 flex h-9 w-9 items-center justify-center rounded-full text-gray-700 transition hover:bg-gray-50 active:scale-95"\n            >\n              <KhodroyabChevronIcon className="h-5 w-5" />\n            </button>'''
+          if old_header not in s:
+              raise SystemExit('header back button not found; aborting')
+          s = s.replace(old_header, new_header, 1)
+
+          path.write_text(s)
+
+          # The separate fixed button caused navigation races; the stage-aware header button is now canonical.
+          page = Path('src/app/vehicles/new/page.tsx')
+          ps = page.read_text()
+          ps = ps.replace('import RegistrationBackButton from "@/components/vehicles/RegistrationBackButton";\n', '')
+          ps = ps.replace('    <>\n      <RegistrationBackButton />\n      <NewVehicleClient initialData={initialData} />\n    </>', '    <NewVehicleClient initialData={initialData} />')
+          page.write_text(ps)
+
+          # Remove the obsolete event-driven button so there is only one registration back control.
+          obsolete = Path('src/components/vehicles/RegistrationBackButton.tsx')
+          if obsolete.exists():
+              obsolete.unlink()
+
+          print('registration polish patch complete')
+          PY
+
+      - name: Verify required invariants
+        run: |
+          ! grep -Rni 'خودروی مشابه پیدا شد' src/app/vehicles/new src/components/vehicles || true
+          ! grep -Rni 'formatPriceUnit' src/app/vehicles/new/NewVehicleClient.tsx || true
+          grep -n 'KhodroyabChevronIcon' src/app/vehicles/new/NewVehicleClient.tsx
+          grep -n 'goBackRegistrationStep' src/app/vehicles/new/NewVehicleClient.tsx
+          grep -n 'formatPersianInteger' src/app/vehicles/new/NewVehicleClient.tsx
+
+      - name: Commit patch
+        run: |
+          git config user.name 'github-actions[bot]'
+          git config user.email '41898282+github-actions[bot]@users.noreply.github.com'
+          git add -A
+          git diff --cached --quiet && exit 0
+          git commit -m 'Fix registration price formatting and back navigation'
+          git push
