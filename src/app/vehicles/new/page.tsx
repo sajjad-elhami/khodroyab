@@ -1,7 +1,6 @@
 import NewVehicleClient from "./NewVehicleClient";
 import { requireAuth } from "@/lib/auth/guards";
 import { getVehicleNewPageData } from "@/lib/data/vehicles/getVehicleNewPageData";
-import RegistrationBackButton from "@/components/vehicles/RegistrationBackButton";
 
 type NewVehiclePageProps = {
   searchParams: Promise<{
@@ -15,9 +14,6 @@ export default async function NewVehiclePage({ searchParams }: NewVehiclePagePro
   const initialData = await getVehicleNewPageData(supabase, params.dealershipId ?? null);
 
   return (
-    <>
-      <RegistrationBackButton />
-      <NewVehicleClient initialData={initialData} />
-    </>
+    <NewVehicleClient initialData={initialData} />
   );
 }

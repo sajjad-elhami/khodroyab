@@ -7,32 +7,18 @@ import { createClient } from "@/lib/supabase/client";
 import { getVehicleModelsByBrand, getVehicleTrimsByModel } from "@/lib/data/catalog/clientCatalog";
 import { processVehicleImage } from "@/lib/images/processVehicleImage";
 import { useRouter } from "next/navigation";
+import KhodroyabChevronIcon from "@/components/vehicles/KhodroyabChevronIcon";
 import VehicleBodyInspection, {
   type BodyPart,
   type Inspection,
 } from "@/components/vehicles/VehicleBodyInspection";
 import {
-  checkVehicleDuplicateAction,
   createVehicleAction,
   createVehicleBodyInspectionAction,
   createVehicleImageRowsAction,
   rollbackVehicleCreationAction,
 } from "../mutations";
 
-type DuplicateVehicle = {
-  vehicle_id: string;
-  brand: string;
-  model: string;
-  trim_name: string | null;
-  model_year: number | null;
-  mileage: number | null;
-  color: string | null;
-  price: number | null;
-  status: string;
-  created_at: string;
-  similarity_score: number;
-  match_level: "strong" | "possible" | "weak";
-};
 
 type DealershipOption = {
   id: string;
@@ -71,36 +57,19 @@ type VehicleTrim = {
   drivetrain: string | null;
 };
 
+
 type Props = {
   initialData: NewVehiclePageData;
 };
 
-function formatPriceUnit(value: string): string {
-  const raw = value.replace(/[^\d]/g, "");
-  if (!raw) return "";
+function formatPersianInteger(value: string): string {
+  const digits = normalizeDigits(value).replace(/\D/g, "");
+  if (!digits) return "";
 
-  const amount = Number(raw);
-  if (!Number.isFinite(amount) || amount <= 0) return "";
-
-  const formatFa = (n: number) =>
-    n.toLocaleString("fa-IR", {
-      maximumFractionDigits: 1,
-    });
-
-  if (amount >= 1_000_000_000) {
-    return `${formatFa(amount / 1_000_000_000)} میلیارد تومان`;
-  }
-
-  if (amount >= 1_000_000) {
-    return `${formatFa(amount / 1_000_000)} میلیون تومان`;
-  }
-
-  if (amount >= 1_000) {
-    return `${formatFa(amount / 1_000)} هزار تومان`;
-  }
-
-  return `${formatFa(amount)} تومان`;
+  const grouped = digits.replace(/\B(?=(\d{3})+(?!\d))/g, "٬");
+  return grouped.replace(/\d/g, (digit) => "۰۱۲۳۴۵۶۷۸۹"[Number(digit)]);
 }
+
 
 export default function NewVehicleClient({
   initialData,
@@ -196,9 +165,6 @@ export default function NewVehicleClient({
   }, [imagePreviews]);
   const [saving, setSaving] = useState(false);
   const [error, setError] = useState("");
-  const [duplicateVehicles, setDuplicateVehicles] =
-    useState<DuplicateVehicle[]>([]);
-  const [duplicateChecking, setDuplicateChecking] = useState(false);
 
   // ثبت خودرو — جریان سه‌مرحله‌ای
   const [currentStep, setCurrentStep] = useState(1);
@@ -342,21 +308,22 @@ export default function NewVehicleClient({
     setCurrentStep((step) => Math.min(step + 1, 3));
   }
 
-  useEffect(() => {
-    function handleRegistrationBack(event: Event) {
-      event.preventDefault();
-      setError("");
-      setCurrentStep((step) => {
-        if (step <= 1) {
-          window.history.back();
-          return step;
-        }
-        return step - 1;
-      });
+
+  function goBackRegistrationStep() {
+    setError("");
+    if (pickerOpen) {
+      setPickerOpen(null);
+      setPickerSearch("");
+      return;
     }
-    window.addEventListener("khodroyab:registration-back", handleRegistrationBack);
-    return () => window.removeEventListener("khodroyab:registration-back", handleRegistrationBack);
-  }, []);
+
+    if (currentStep > 1) {
+      setCurrentStep((step) => step - 1);
+      return;
+    }
+
+    router.back();
+  }
 
   function openChassisPicker(target: "front" | "rear") {
     setChassisTarget(target);
@@ -639,54 +606,10 @@ export default function NewVehicleClient({
     setGearboxCondition("");
     setPickerOpen(null);
     setPickerSearch("");
-    setDuplicateVehicles([]);
     setError("");
     setImageSheetOpen(false);
   }
 
-  async function checkVehicleDuplicates() {
-    if (!dealershipId || !brand.trim() || !model.trim()) {
-      setDuplicateVehicles([]);
-      return;
-    }
-
-    setDuplicateChecking(true);
-
-    const result = await checkVehicleDuplicateAction({
-      dealershipId,
-      brand: brand.trim(),
-      model: model.trim(),
-      trim: trim.trim() || null,
-      modelYear: modelYear ? Number(modelYear) : null,
-      mileage: mileage ? Number(mileage) : null,
-      color: color.trim() || null,
-      excludeVehicleId: null,
-    });
-
-    if (result.ok) {
-      setDuplicateVehicles(result.data as DuplicateVehicle[]);
-    } else {
-      setDuplicateVehicles([]);
-    }
-
-    setDuplicateChecking(false);
-  }
-
-  useEffect(() => {
-    const timer = window.setTimeout(() => {
-      checkVehicleDuplicates();
-    }, 600);
-
-    return () => window.clearTimeout(timer);
-  }, [
-    dealershipId,
-    brand,
-    model,
-    trim,
-    modelYear,
-    mileage,
-    color,
-  ]);
 
   async function createVehicle(e: React.FormEvent) {
     e.preventDefault();
@@ -960,24 +883,11 @@ export default function NewVehicleClient({
 
             <button
               type="button"
-              aria-label="بازگشت به صفحه اصلی"
-              onClick={() => router.push("/")}
-              className="absolute right-0 flex h-9 w-9 items-center justify-center rounded-full text-gray-700 transition hover:bg-gray-50"
+              aria-label="مرحله قبل"
+              onClick={goBackRegistrationStep}
+              className="absolute right-0 flex h-9 w-9 items-center justify-center rounded-full text-gray-700 transition hover:bg-gray-50 active:scale-95"
             >
-              <svg
-                viewBox="0 0 24 24"
-                fill="none"
-                className="h-5 w-5"
-                aria-hidden="true"
-              >
-                <path
-                  d="M15 5l-7 7 7 7"
-                  stroke="currentColor"
-                  strokeWidth="1.8"
-                  strokeLinecap="round"
-                  strokeLinejoin="round"
-                />
-              </svg>
+              <KhodroyabChevronIcon className="h-5 w-5" />
             </button>
           </div>
 
@@ -1034,37 +944,6 @@ export default function NewVehicleClient({
           }}
           className="space-y-6"
         >
-          {!duplicateChecking && duplicateVehicles.length > 0 && (
-            <div className="rounded-2xl border border-amber-200 bg-amber-50 p-4">
-              <div className="font-extrabold text-amber-950">
-                خودروی مشابه پیدا شد
-              </div>
-
-              <div className="mt-3 space-y-2">
-                {duplicateVehicles.map((vehicle) => (
-                  <div
-                    key={vehicle.vehicle_id}
-                    className="rounded-xl border border-amber-200 bg-white p-3"
-                  >
-                    <div className="font-bold text-slate-900">
-                      {vehicle.brand} {vehicle.model}
-                      {vehicle.trim_name ? ` · ${vehicle.trim_name}` : ""}
-                    </div>
-
-                    <div className="mt-1 text-xs text-slate-500">
-                      {vehicle.model_year != null
-                        ? `سال ${vehicle.model_year.toLocaleString("fa-IR", { useGrouping: false })}`
-                        : ""}
-                      {vehicle.mileage != null
-                        ? ` · ${vehicle.mileage.toLocaleString("fa-IR")} کیلومتر`
-                        : ""}
-                    </div>
-                  </div>
-                ))}
-              </div>
-            </div>
-          )}
-
           <section className="overflow-hidden rounded-2xl bg-white shadow-sm ring-1 ring-gray-100">
             <div className="divide-y divide-gray-100">
 
@@ -1221,9 +1100,7 @@ export default function NewVehicleClient({
                     mileage ? "text-red-600" : "text-gray-400"
                   }`}
                 >
-                  {mileage
-                    ? `${Number(mileage).toLocaleString("fa-IR")} کیلومتر`
-                    : "انتخاب"}
+                  {mileage ? `${formatPersianInteger(mileage)} کیلومتر` : "انتخاب"}
 
                   <svg
                     viewBox="0 0 24 24"
@@ -1363,11 +1240,7 @@ export default function NewVehicleClient({
                     price ? "text-red-600" : "text-gray-400"
                   }`}
                 >
-                  {price
-                    ? `${Number(
-                        price.replace(/[^0-9]/g, "") || 0
-                      ).toLocaleString("fa-IR")} تومان`
-                    : "انتخاب"}
+                  {price ? `${formatPersianInteger(price)} تومان` : "انتخاب"}
 
                   <svg
                     viewBox="0 0 24 24"
@@ -1939,12 +1812,8 @@ export default function NewVehicleClient({
                     inputMode="numeric"
                     value={
                       pickerOpen === "mileage"
-                        ? mileage
-                          ? Number(mileage).toLocaleString("fa-IR")
-                          : ""
-                        : price
-                          ? Number(price).toLocaleString("fa-IR")
-                          : ""
+                        ? formatPersianInteger(mileage)
+                        : formatPersianInteger(price)
                     }
                     onChange={(e) => {
                       const value = normalizeDigits(e.target.value).replace(/\D/g, "");
@@ -1963,11 +1832,6 @@ export default function NewVehicleClient({
                     className="box-border w-full rounded-xl border border-gray-200 bg-white px-4 py-4 text-[16px] text-gray-900 outline-none focus:border-gray-400"
                   />
 
-                  {pickerOpen === "price" && price && (
-                    <p className="mt-3 text-center text-[14px] font-bold text-gray-600">
-                      {formatPriceUnit(price)}
-                    </p>
-                  )}
 
                   <button
                     type="button"
