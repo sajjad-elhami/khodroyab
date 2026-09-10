@@ -1870,7 +1870,7 @@ export default function VehiclesClient({
                  return (
                   <article
                     key={vehicle.id}
-                    className="h-[132px] overflow-hidden rounded-2xl border border-gray-200 bg-white shadow-sm"
+                    className="h-[175px] overflow-hidden rounded-2xl border border-gray-200 bg-white shadow-sm"
                   >
                     <Link
                       href={`/vehicles/${vehicle.id}`}
@@ -1883,7 +1883,7 @@ export default function VehiclesClient({
                           <img
                             src={vehicle.image_url}
                             alt={`${vehicle.model}${vehicle.model_year ? ` مدل ${formatYear(vehicle.model_year)}` : ""}`}
-                            className="h-full w-full object-contain"
+                            className="h-full w-full object-cover"
                             loading="lazy"
                           />
                         ) : (
