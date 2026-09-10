@@ -17,7 +17,7 @@ export default function KhodroyabChevronIcon({
       {...props}
     >
       <path
-        d="M15 5l-7 7 7 7"
+        d="M9 5l7 7-7 7"
         stroke="currentColor"
         strokeWidth="1.7"
         strokeLinecap="round"
