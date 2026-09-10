@@ -8,122 +8,89 @@ async function getCurrentUser() {
   const { data: claimsData } = await supabase.auth.getClaims();
   const userId = claimsData?.claims?.sub;
 
-  if (!userId) {
-    throw new Error("کاربر وارد سیستم نشده است.");
-  }
-
+  if (!userId) throw new Error("کاربر وارد سیستم نشده است.");
   return { supabase, userId };
 }
 
 export async function updateInventoryVehicleAction(vehicleId: string) {
   try {
     const { supabase, userId } = await getCurrentUser();
-
-    const { data: profile, error: profileError } = await supabase
-      .from("profiles")
-      .select("role, dealership_id")
-      .eq("id", userId)
-      .maybeSingle();
-
+    const { data: profile, error: profileError } = await supabase.from("profiles").select("role, dealership_id").eq("id", userId).maybeSingle();
     if (profileError) throw profileError;
-
     const isAdmin = profile?.role === "admin";
     const dealershipId = profile?.dealership_id;
-
-    let query = supabase
-      .from("vehicles")
-      .update({ inventory_confirmed_at: new Date().toISOString() })
-      .eq("id", vehicleId);
-
+    let query = supabase.from("vehicles").update({ inventory_confirmed_at: new Date().toISOString() }).eq("id", vehicleId);
     if (!isAdmin) {
-      if (!dealershipId) {
-        return { ok: false as const, error: "نمایشگاه کاربر مشخص نیست." };
-      }
+      if (!dealershipId) return { ok: false as const, error: "نمایشگاه کاربر مشخص نیست." };
       query = query.eq("dealership_id", dealershipId);
     }
-
     const { error } = await query;
     if (error) throw error;
+    return { ok: true as const };
+  } catch (error) {
+    return { ok: false as const, error: error instanceof Error ? error.message : "خطا در بروزرسانی موجودی خودرو." };
+  }
+}
+
+export async function deleteInventoryVehicleAction(vehicleId: string) {
+  try {
+    const { supabase } = await getCurrentUser();
+
+    const { data: images, error: imagesError } = await supabase
+      .from("vehicle_images")
+      .select("storage_path")
+      .eq("vehicle_id", vehicleId);
+    if (imagesError) throw imagesError;
+
+    const storagePaths = (images ?? [])
+      .map((image) => image.storage_path)
+      .filter((path): path is string => Boolean(path));
+
+    if (storagePaths.length > 0) {
+      const { error: storageError } = await supabase.storage.from("vehicle-images").remove(storagePaths);
+      if (storageError) throw storageError;
+    }
+
+    const { error: deleteError } = await supabase.rpc("delete_vehicle_completely", { p_vehicle_id: vehicleId });
+    if (deleteError) throw deleteError;
 
     return { ok: true as const };
   } catch (error) {
-    return {
-      ok: false as const,
-      error: error instanceof Error ? error.message : "خطا در بروزرسانی موجودی خودرو.",
-    };
+    return { ok: false as const, error: error instanceof Error ? error.message : "خطا در حذف کامل خودرو." };
   }
 }
 
 export async function markInventoryVehicleSoldAction(vehicleId: string) {
   try {
     const { supabase, userId } = await getCurrentUser();
-
-    const { data: profile, error: profileError } = await supabase
-      .from("profiles")
-      .select("role, dealership_id")
-      .eq("id", userId)
-      .maybeSingle();
-
+    const { data: profile, error: profileError } = await supabase.from("profiles").select("role, dealership_id").eq("id", userId).maybeSingle();
     if (profileError) throw profileError;
-
     const isAdmin = profile?.role === "admin";
     const dealershipId = profile?.dealership_id;
-
-    let query = supabase
-      .from("vehicles")
-      .update({ status: "sold", inventory_confirmed_at: new Date().toISOString() })
-      .eq("id", vehicleId);
-
+    let query = supabase.from("vehicles").update({ status: "sold", inventory_confirmed_at: new Date().toISOString() }).eq("id", vehicleId);
     if (!isAdmin) {
-      if (!dealershipId) {
-        return { ok: false as const, error: "نمایشگاه کاربر مشخص نیست." };
-      }
+      if (!dealershipId) return { ok: false as const, error: "نمایشگاه کاربر مشخص نیست." };
       query = query.eq("dealership_id", dealershipId);
     }
-
     const { error } = await query;
     if (error) throw error;
-
     return { ok: true as const };
   } catch (error) {
-    return {
-      ok: false as const,
-      error: error instanceof Error ? error.message : "خطا در ثبت فروش خودرو.",
-    };
+    return { ok: false as const, error: error instanceof Error ? error.message : "خطا در ثبت فروش خودرو." };
   }
 }
 
-export async function loadMyDealershipInventoryAction(
-  offset: number,
-  limit = 30,
-) {
+export async function loadMyDealershipInventoryAction(offset: number, limit = 30) {
   const supabase = await createClient();
-
   const { data: claimsData } = await supabase.auth.getClaims();
   const userId = claimsData?.claims?.sub;
-
-  if (!userId) {
-    return {
-      ok: false as const,
-      error: "کاربر وارد سیستم نشده است.",
-    };
-  }
-
+  if (!userId) return { ok: false as const, error: "کاربر وارد سیستم نشده است." };
   const safeOffset = Number.isFinite(offset) && offset >= 0 ? Math.floor(offset) : 0;
   const safeLimit = Number.isFinite(limit) && limit > 0 ? Math.min(Math.floor(limit), 50) : 30;
-
   try {
-    const data = await getMyDealershipPageData(
-      supabase,
-      safeLimit,
-      safeOffset,
-    );
-
+    const data = await getMyDealershipPageData(supabase, safeLimit, safeOffset);
     return { ok: true as const, data };
   } catch (error) {
-    return {
-      ok: false as const,
-      error: error instanceof Error ? error.message : "خطا در دریافت موجودی نمایشگاه.",
-    };
+    return { ok: false as const, error: error instanceof Error ? error.message : "خطا در دریافت موجودی نمایشگاه." };
   }
 }
