@@ -46,14 +46,11 @@ export default function MyDealershipClient({ initialData }: { initialData: MyDea
   const [totalCount, setTotalCount] = useState(initialData.totalCount);
   const [loadingMore, setLoadingMore] = useState(false);
   const [error, setError] = useState("");
-  const [query, setQuery] = useState("");
 
   const isAdmin = initialData.role === "admin";
   const hasMore = vehicles.length < totalCount;
   const isActive = isAdmin ? true : initialData.dealershipIsActive !== false;
   const title = isAdmin ? "کل موجودی خودرو‌یاب" : initialData.dealershipName ?? "نمایشگاه من";
-  const normalizedQuery = query.trim().toLocaleLowerCase();
-  const visibleVehicles = normalizedQuery ? vehicles.filter((vehicle) => `${vehicle.brand} ${vehicle.model} ${vehicle.trim ?? ""}`.toLocaleLowerCase().includes(normalizedQuery)) : vehicles;
 
   async function loadMore() {
     if (loadingMore || !hasMore) return;
@@ -68,40 +65,40 @@ export default function MyDealershipClient({ initialData }: { initialData: MyDea
   return (
     <MobileAppShell>
       <div dir="rtl" className="mx-auto w-full max-w-xl px-4 pb-32 pt-[88px]">
-        <header className="mb-5">
-          <div className="flex items-center justify-between gap-3">
-            <h1 className="min-w-0 truncate text-[22px] font-black tracking-tight text-gray-950">{title}</h1>
-            <span className={`shrink-0 rounded-full px-3 py-1.5 text-xs font-bold ${isActive ? "bg-emerald-50 text-emerald-700" : "bg-red-50 text-red-600"}`}>وضعیت: {isActive ? "🟢 فعال" : "🔴 غیرفعال"}</span>
+        {/* صفحه «نمایشگاه من» هدر اختصاصی دارد؛ هدر عمومی MobileAppShell در این صفحه عمداً با این هدر پوشانده می‌شود. */}
+        <header className="fixed inset-x-0 top-0 z-50 border-b border-gray-100 bg-white/95 shadow-sm backdrop-blur-xl">
+          <div className="mx-auto flex h-[68px] w-full max-w-xl items-center justify-between gap-3 px-4">
+            <h1 className="min-w-0 flex-1 truncate text-right text-[21px] font-black tracking-tight text-gray-950">{title}</h1>
+            <span className={`shrink-0 text-sm font-extrabold ${isActive ? "text-emerald-600" : "text-red-600"}`}>
+              {isActive ? "🟢 فعال" : "🔴 غیرفعال"}
+            </span>
           </div>
-          <p className="mt-3 text-sm font-medium text-gray-500">مدیریت سریع خودروهای نمایشگاه</p>
         </header>
+
+        <section className="mb-5">
+          <p className="text-sm font-medium text-gray-500">مدیریت سریع خودروهای نمایشگاه</p>
+        </section>
 
         {!isAdmin && !isActive && <div className="mb-4 rounded-2xl border border-red-100 bg-red-50 px-4 py-3 text-sm leading-6 text-red-700">این نمایشگاه در حال حاضر غیرفعال است.</div>}
 
-        <Link href="/vehicles/new" className="mb-4 flex h-14 w-full items-center justify-center gap-2 rounded-[19px] bg-emerald-600 text-[15px] font-extrabold text-white shadow-[0_8px_24px_rgba(16,185,129,0.18)] active:scale-[0.99]">
+        <Link href="/vehicles/new" className="mb-5 flex h-14 w-full items-center justify-center gap-2 rounded-[19px] bg-emerald-600 text-[15px] font-extrabold text-white shadow-[0_8px_24px_rgba(16,185,129,0.18)] active:scale-[0.99]">
           <span className="text-xl leading-none">＋</span>ثبت خودروی جدید
         </Link>
 
-        <div className="mb-5 flex h-12 items-center gap-2 rounded-[17px] border border-gray-200 bg-white px-4 shadow-[0_3px_16px_rgba(15,23,42,0.035)]">
-          <span className="text-lg text-gray-400" aria-hidden="true">⌕</span>
-          <input value={query} onChange={(event) => setQuery(event.target.value)} placeholder="جستجو در موجودی من" className="min-w-0 flex-1 bg-transparent text-sm font-medium text-gray-900 outline-none placeholder:text-gray-400" inputMode="search" dir="rtl" />
-          {query && <button type="button" onClick={() => setQuery("")} className="rounded-full px-2 text-lg text-gray-400 active:bg-gray-100" aria-label="پاک کردن جستجو">×</button>}
-        </div>
+        <div className="mb-3 flex items-center justify-between"><h2 className="text-base font-black text-gray-950">خودروهای نمایشگاه</h2><span className="text-xs font-bold text-gray-400">{totalCount.toLocaleString("fa-IR")} خودرو</span></div>
 
         {error && <div className="mb-4 rounded-2xl border border-red-100 bg-red-50 px-4 py-3 text-sm text-red-700">{error}</div>}
 
-        <div className="mb-3 flex items-center justify-between"><h2 className="text-base font-black text-gray-950">خودروهای نمایشگاه</h2><span className="text-xs font-bold text-gray-400">{totalCount.toLocaleString("fa-IR")} خودرو</span></div>
-
-        {visibleVehicles.length === 0 ? (
+        {vehicles.length === 0 ? (
           <div className="rounded-[24px] border border-dashed border-gray-200 bg-white px-6 py-14 text-center">
             <div className="mx-auto flex h-14 w-14 items-center justify-center rounded-2xl bg-gray-50 text-2xl">🚗</div>
-            <h2 className="mt-4 text-base font-extrabold text-gray-900">{query ? "خودرویی پیدا نشد" : "هنوز خودرویی ثبت نکرده‌اید"}</h2>
-            <p className="mt-2 text-sm leading-6 text-gray-500">{query ? "عبارت جستجو را تغییر دهید." : "اولین خودرو را برای نمایشگاه ثبت کنید."}</p>
+            <h2 className="mt-4 text-base font-extrabold text-gray-900">هنوز خودرویی ثبت نکرده‌اید</h2>
+            <p className="mt-2 text-sm leading-6 text-gray-500">اولین خودرو را برای نمایشگاه ثبت کنید.</p>
           </div>
         ) : (
           <div className="space-y-3">
-            {visibleVehicles.map((vehicle) => <VehicleCard key={vehicle.id} vehicle={vehicle} />)}
-            {hasMore && !query && <button type="button" onClick={loadMore} disabled={loadingMore} className="w-full rounded-2xl border border-gray-200 bg-white py-3.5 text-sm font-extrabold text-gray-800 shadow-sm disabled:cursor-wait disabled:opacity-60">{loadingMore ? "در حال دریافت..." : "نمایش خودروهای بیشتر"}</button>}
+            {vehicles.map((vehicle) => <VehicleCard key={vehicle.id} vehicle={vehicle} />)}
+            {hasMore && <button type="button" onClick={loadMore} disabled={loadingMore} className="w-full rounded-2xl border border-gray-200 bg-white py-3.5 text-sm font-extrabold text-gray-800 shadow-sm disabled:cursor-wait disabled:opacity-60">{loadingMore ? "در حال دریافت..." : "نمایش خودروهای بیشتر"}</button>}
           </div>
         )}
       </div>
