@@ -25,71 +25,20 @@ body {
   font-family: "Vazirmatn", sans-serif;
 }
 
-/* Mobile bottom navigation refinements */
-nav.fixed.bottom-0 > div {
-  height: 88px !important;
-}
-
+nav.fixed.bottom-0 > div { height: 88px !important; }
 nav.fixed.bottom-0 > div > a[href="/vehicles"] { order: 1; }
 nav.fixed.bottom-0 > div > a[href="/favorites"] { order: 2; }
 nav.fixed.bottom-0 > div > a[href="/vehicles/new"] { order: 3; }
 nav.fixed.bottom-0 > div > a[href="/dealerships"] { order: 4; }
 nav.fixed.bottom-0 > div > a[href="/dashboard"] { order: 5; }
-
-nav.fixed.bottom-0 > div > a {
-  transform: translateY(-5px);
-}
-
-nav.fixed.bottom-0 > div > a > span:first-child > svg {
-  width: 23px !important;
-  height: 23px !important;
-}
-
-nav.fixed.bottom-0 > div > a > span {
-  display: block !important;
-}
-
-nav.fixed.bottom-0 > div > a > span:last-child {
-  display: block !important;
-  visibility: visible !important;
-  opacity: 1 !important;
-  font-size: 11px !important;
-  line-height: 16px !important;
-  margin-top: 3px !important;
-}
-
-nav.fixed.bottom-0 > div > a > span:nth-child(2) {
-  font-size: 11px !important;
-}
-
+nav.fixed.bottom-0 > div > a { transform: translateY(-5px); }
+nav.fixed.bottom-0 > div > a > span:first-child > svg { width: 23px !important; height: 23px !important; }
+nav.fixed.bottom-0 > div > a > span { display: block !important; }
+nav.fixed.bottom-0 > div > a > span:last-child { display: block !important; visibility: visible !important; opacity: 1 !important; font-size: 11px !important; line-height: 16px !important; margin-top: 3px !important; }
+nav.fixed.bottom-0 > div > a > span:nth-child(2) { font-size: 11px !important; }
 nav.fixed.bottom-0 > div > a.text-gray-950,
-nav.fixed.bottom-0 > div > a.text-gray-950 span {
-  color: #dc2626 !important;
-}
+nav.fixed.bottom-0 > div > a.text-gray-950 span { color: #dc2626 !important; }
 
-/* Vehicle cards: compact height that fits the six metadata rows. */
-div:has(> div.h-full.w-\[122px\]) {
-  min-height: 150px !important;
-  height: 150px !important;
-}
-
-/* Directly override the Tailwind arbitrary-height utility used by the feed cards. */
-article[class*="h-[175px]"] {
-  height: 150px !important;
-}
-
-/* Fill the image frame edge-to-edge. */
-div:has(> div.h-full.w-\[122px\]) img {
-  width: 100% !important;
-  height: 100% !important;
-  object-fit: cover !important;
-}
-
-/* The vehicle search control now lives in the fixed top header. */
-main > div > div.space-y-3 > section:first-child > button:first-child {
-  display: none !important;
-}
-
-main > div > div.space-y-3 > section:first-child > div {
-  margin-top: 0 !important;
-}
+div:has(> div.h-full.w-\[122px\]) { min-height: 150px !important; height: 150px !important; }
+article[class*="h-[175px]"] { height: 150px !important; }
+div:has(> div.h-full.w-\[122px\]) img { width: 100% !important; height: 100% !important; object-fit: cover !important; }
