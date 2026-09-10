@@ -78,3 +78,20 @@ div:has(> div.h-full.w-\[122px\]) img { width: 100% !important; height: 100% !im
     display: none !important;
   }
 }
+
+/*
+ * Persian/RTL selection rows: keep the small navigation chevron
+ * visually and semantically pointing LEFT, independent of RTL bidi rules.
+ * The selector targets the shared circular chevron treatment so the same
+ * behavior is reused anywhere this filter control is used.
+ */
+span[aria-hidden="true"][class*="rounded-full"][class*="bg-gray-100"] {
+  direction: ltr !important;
+  unicode-bidi: isolate !important;
+  transform: none !important;
+  font-family: Arial, sans-serif !important;
+}
+
+span[aria-hidden="true"][class*="rounded-full"][class*="bg-gray-100"]::first-letter {
+  direction: ltr !important;
+}
