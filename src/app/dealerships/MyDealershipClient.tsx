@@ -99,18 +99,17 @@ export default function MyDealershipClient({ initialData }: { initialData: MyDea
     <MobileAppShell>
       <div dir="rtl" className="mx-auto w-full max-w-xl px-4 pb-32 pt-[68px]">
         <header className="border-b border-gray-100 bg-white/95 shadow-sm backdrop-blur-xl">
-          <div className="flex h-[68px] w-full items-center justify-between gap-3 px-0">
-            <h1 className="min-w-0 flex-1 truncate text-right text-[21px] font-black tracking-tight text-gray-950">{title}</h1>
-            <span className={`shrink-0 text-sm font-extrabold ${isActive ? "text-emerald-600" : "text-red-600"}`}>{isActive ? "🟢 فعال" : "🔴 غیرفعال"}</span>
+          <div className="w-full px-0">
+            <div className="flex h-[68px] w-full items-center justify-between gap-3">
+              <h1 className="min-w-0 flex-1 truncate text-right text-[21px] font-black tracking-tight text-gray-950">{title}</h1>
+              <span className={`shrink-0 text-sm font-extrabold ${isActive ? "text-emerald-600" : "text-red-600"}`}>{isActive ? "🟢 فعال" : "🔴 غیرفعال"}</span>
+            </div>
+            <Link href="/vehicles/new" className="flex h-14 w-full items-center justify-center gap-2 rounded-[19px] bg-emerald-600 text-[15px] font-extrabold text-white shadow-[0_8px_24px_rgba(16,185,129,0.18)] active:scale-[0.99]">
+              <span className="text-xl leading-none">＋</span>
+              ثبت خودروی جدید
+            </Link>
           </div>
         </header>
-
-        <div className="pt-0">
-          <Link href="/vehicles/new" className="flex h-14 w-full items-center justify-center gap-2 rounded-[19px] bg-emerald-600 text-[15px] font-extrabold text-white shadow-[0_8px_24px_rgba(16,185,129,0.18)] active:scale-[0.99]">
-            <span className="text-xl leading-none">＋</span>
-            ثبت خودروی جدید
-          </Link>
-        </div>
 
         {!isAdmin && !isActive && <div className="mt-4 rounded-2xl border border-red-100 bg-red-50 px-4 py-3 text-sm leading-6 text-red-700">این نمایشگاه در حال حاضر غیرفعال است.</div>}
 
