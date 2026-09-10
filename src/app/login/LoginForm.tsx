@@ -44,7 +44,7 @@ export default function LoginForm() {
       redirectTo.startsWith("/") &&
       !redirectTo.startsWith("//")
         ? redirectTo
-        : "/dashboard";
+        : "/vehicles";
 
     router.replace(safeRedirect);
     router.refresh();
@@ -74,63 +74,12 @@ export default function LoginForm() {
       >
         <h1>ورود خودرو‌یاب</h1>
 
-        <input
-          type="email"
-          placeholder="ایمیل"
-          value={email}
-          onChange={(e) => setEmail(e.target.value)}
-          style={{
-            width: "100%",
-            boxSizing: "border-box",
-            padding: 12,
-            marginTop: 15,
-            borderRadius: 10,
-            border: "1px solid #ddd",
-          }}
-        />
-
-        <input
-          type="password"
-          placeholder="رمز عبور"
-          value={password}
-          onChange={(e) => setPassword(e.target.value)}
-          onKeyDown={(e) => {
-            if (e.key === "Enter") {
-              login();
-            }
-          }}
-          style={{
-            width: "100%",
-            boxSizing: "border-box",
-            padding: 12,
-            marginTop: 10,
-            borderRadius: 10,
-            border: "1px solid #ddd",
-          }}
-        />
-
-        <button
-          onClick={login}
-          disabled={loading}
-          style={{
-            width: "100%",
-            padding: 12,
-            marginTop: 15,
-            border: 0,
-            borderRadius: 10,
-            background: "#111827",
-            color: "#fff",
-            cursor: loading ? "not-allowed" : "pointer",
-          }}
-        >
+        <input type="email" placeholder="ایمیل" value={email} onChange={(e) => setEmail(e.target.value)} style={{ width: "100%", boxSizing: "border-box", padding: 12, marginTop: 15, borderRadius: 10, border: "1px solid #ddd" }} />
+        <input type="password" placeholder="رمز عبور" value={password} onChange={(e) => setPassword(e.target.value)} onKeyDown={(e) => { if (e.key === "Enter") login(); }} style={{ width: "100%", boxSizing: "border-box", padding: 12, marginTop: 10, borderRadius: 10, border: "1px solid #ddd" }} />
+        <button onClick={login} disabled={loading} style={{ width: "100%", padding: 12, marginTop: 15, border: 0, borderRadius: 10, background: "#111827", color: "#fff", cursor: loading ? "not-allowed" : "pointer" }}>
           {loading ? "در حال ورود..." : "ورود"}
         </button>
-
-        {message && (
-          <p style={{ marginTop: 15 }}>
-            {message}
-          </p>
-        )}
+        {message && <p style={{ marginTop: 15 }}>{message}</p>}
       </div>
     </main>
   );
