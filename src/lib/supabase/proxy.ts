@@ -15,8 +15,8 @@ export async function updateSession(request: NextRequest) {
           return request.cookies.getAll();
         },
         setAll(cookiesToSet) {
-          cookiesToSet.forEach(({ name, value }) => {
-            request.cookies.set(name, value);
+          cookiesToSet.forEach(({ name, value, options }) => {
+            request.cookies.set(name, value, options);
           });
 
           supabaseResponse = NextResponse.next({
@@ -31,8 +31,6 @@ export async function updateSession(request: NextRequest) {
     }
   );
 
-  // Verify the JWT locally when possible instead of making
-  // a network request to the Auth server on every request.
   const claimsStart = performance.now();
   const { data: claimsData } = await supabase.auth.getClaims();
   const claimsMs = performance.now() - claimsStart;
@@ -60,8 +58,6 @@ export async function updateSession(request: NextRequest) {
     return NextResponse.redirect(url);
   }
 
-  // Authenticated users entering the login page should return to
-  // the vehicle inventory, which is now the app's default landing page.
   if (isAuthenticated && pathname === "/login") {
     const url = request.nextUrl.clone();
     url.pathname = "/vehicles";
