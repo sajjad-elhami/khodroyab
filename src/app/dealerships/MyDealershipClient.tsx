@@ -42,18 +42,32 @@ export default function MyDealershipClient({ initialData }: { initialData: MyDea
   const isAdmin = initialData.role === "admin"; const hasMore = vehicles.length < totalCount; const isActive = isAdmin ? true : initialData.dealershipIsActive !== false; const title = isAdmin ? "کل موجودی خودرو‌یاب" : initialData.dealershipName ?? "نمایشگاه من";
   async function loadMore() { if (loadingMore || !hasMore) return; setLoadingMore(true); const result = await loadMyDealershipInventoryAction(vehicles.length, PAGE_SIZE); if (!result.ok) { setError(result.error); setLoadingMore(false); return; } setVehicles(current => [...current, ...result.data.vehicles]); setTotalCount(result.data.totalCount); setLoadingMore(false); }
   function handleDeleted(vehicleId: string) { setVehicles(current => current.filter(v => v.id !== vehicleId)); setTotalCount(current => Math.max(0, current - 1)); }
-  return <MobileAppShell><div dir="rtl" className="mx-auto w-full max-w-xl px-4 pb-32 pt-[96px]">
-    <div className="mb-5 flex items-center justify-between gap-3">
-      <div className="min-w-0">
-        <h1 className="truncate text-[20px] font-black tracking-tight text-gray-950">{title}</h1>
-        <div className={`mt-0.5 text-[11px] font-bold ${isActive ? "text-emerald-600" : "text-red-600"}`}>
-          <span className="mr-1 inline-block text-[9px]">●</span>{isActive ? "فعال" : "غیرفعال"}
-        </div>
+  return <MobileAppShell hideHeader>
+    <header className="fixed inset-x-0 top-0 z-40 border-b border-gray-100 bg-white">
+      <div dir="rtl" className="mx-auto w-full max-w-xl px-4 py-2">
+        {isAdmin ? (
+          <div className="flex h-12 w-full items-center rounded-xl bg-gray-100 px-4">
+            <h1 className="min-w-0 truncate text-[15px] font-bold text-gray-950">
+              مدیر شبکه
+            </h1>
+          </div>
+        ) : (
+          <div className="flex h-12 w-full items-center justify-between gap-3 rounded-xl bg-gray-100 px-4">
+            <h1 className="min-w-0 truncate text-[15px] font-bold text-gray-950">
+              {title}
+            </h1>
+            <div className={`shrink-0 text-[12px] font-bold ${isActive ? "text-emerald-600" : "text-red-600"}`}>
+              <span className="ml-1 inline-block text-[9px]">●</span>
+              {isActive ? "فعال" : "غیرفعال"}
+            </div>
+          </div>
+        )}
       </div>
-      <span className="shrink-0 text-[11px] font-bold text-gray-400">{totalCount.toLocaleString("fa-IR")} خودرو</span>
-    </div>
+    </header>
 
-    <Link href="/vehicles/new" className="mb-6 flex h-12 w-full items-center justify-center gap-2 rounded-2xl border border-emerald-100 bg-emerald-50 text-[14px] font-extrabold text-emerald-700 transition active:scale-[0.99]">
+    <div dir="rtl" className="mx-auto w-full max-w-xl px-4 pb-32 pt-[64px]">
+
+    <Link href="/vehicles/new" className="mb-2 flex h-12 w-full items-center justify-center gap-2 rounded-2xl bg-emerald-600 text-[14px] font-extrabold text-white transition active:scale-[0.99]">
       <span className="flex h-7 w-7 items-center justify-center rounded-full bg-emerald-600 text-lg leading-none text-white">＋</span>
       <span>ثبت خودروی جدید</span>
     </Link>

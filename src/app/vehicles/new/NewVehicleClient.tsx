@@ -15,6 +15,7 @@ import VehicleBodyInspection, {
 import {
   createVehicleAction,
   createVehicleBodyInspectionAction,
+  replaceVehicleBodyInspectionAction,
   createVehicleImageRowsAction,
   rollbackVehicleCreationAction,
 } from "../mutations";
@@ -58,8 +59,41 @@ type VehicleTrim = {
 };
 
 
+type EditModeData = {
+  vehicleId: string;
+  vehicle: {
+    id: string;
+    brand: string;
+    model: string;
+    trim: string | null;
+    model_year: number | null;
+    mileage: number | null;
+    color: string | null;
+    price: number | null;
+    description: string | null;
+    status: string;
+    dealership_id: string;
+    transmission: string | null;
+    fuel_type: string | null;
+    chassis_condition: string | null;
+    engine_condition: string | null;
+    insurance_expiry_date: string | null;
+    gearbox_condition: string | null;
+  } | null;
+  images: Array<{
+    id: string;
+    storage_path: string;
+    thumbnail_path: string | null;
+    sort_order: number;
+  }>;
+  bodyInspection: Inspection[];
+  selectedBrandId: string | null;
+  selectedModelId: string | null;
+};
+
 type Props = {
   initialData: NewVehiclePageData;
+  editMode?: EditModeData | null;
 };
 
 function formatPersianInteger(value: string): string {
@@ -73,21 +107,36 @@ function formatPersianInteger(value: string): string {
 
 export default function NewVehicleClient({
   initialData,
+  editMode = null,
 }: Props) {
   const router = useRouter();
 
+  const isEditMode = Boolean(editMode?.vehicleId && editMode.vehicle);
+
   const dealerships = initialData.dealerships;
+
+  const editVehicle = editMode?.vehicle ?? null;
+
+  const editImages = editMode?.images ?? [];
+
+  const editBodyInspection = editMode?.bodyInspection ?? [];
+
+  const editSelectedBrandId = editMode?.selectedBrandId ?? "";
+
+  const editSelectedModelId = editMode?.selectedModelId ?? "";
 
   const [dealershipId, setDealershipId] = useState(
     initialData.initialDealershipId ?? ""
   );
 
-  const [brand, setBrand] = useState("");
-  const [model, setModel] = useState("");
-  const [trim, setTrim] = useState("");
-  const [modelYear, setModelYear] = useState("");
+  const [brand, setBrand] = useState(editVehicle?.brand ?? "");
+  const [model, setModel] = useState(editVehicle?.model ?? "");
+  const [trim, setTrim] = useState(editVehicle?.trim ?? "");
+  const [modelYear, setModelYear] = useState(
+    editVehicle?.model_year == null ? "" : String(editVehicle.model_year)
+  );
 
-  const [brandId, setBrandId] = useState("");
+  const [brandId, setBrandId] = useState(editSelectedBrandId);
   const [modelId, setModelId] = useState("");
 
   const [vehicleBrands, setVehicleBrands] = useState<VehicleBrand[]>(initialData.brands as VehicleBrand[]);
@@ -100,14 +149,16 @@ export default function NewVehicleClient({
   const [catalogLoading, setCatalogLoading] = useState(false);
   const [modelsLoading, setModelsLoading] = useState(false);
   const [trimsLoading, setTrimsLoading] = useState(false);
-  const [mileage, setMileage] = useState("");
-  const [color, setColor] = useState("");
-  const [price, setPrice] = useState("");
-  const [description, setDescription] = useState("");
+  const [mileage, setMileage] = useState(editVehicle?.mileage == null ? "" : String(editVehicle.mileage));
+  const [color, setColor] = useState(editVehicle?.color ?? "");
+  const [price, setPrice] = useState(editVehicle?.price == null ? "" : String(editVehicle.price));
+  const [description, setDescription] = useState(editVehicle?.description ?? "");
   const [status, setStatus] = useState("available");
 
   const [bodyParts, setBodyParts] = useState<BodyPart[]>(initialData.bodyParts as BodyPart[]);
-  const [bodyInspection, setBodyInspection] = useState<Inspection[]>([]);
+  const [bodyInspection, setBodyInspection] = useState<Inspection[]>(
+    editBodyInspection
+  );
   const [bodyCondition, setBodyCondition] = useState("");
   const [frontChassisCondition, setFrontChassisCondition] = useState("");
   const [rearChassisCondition, setRearChassisCondition] = useState("");
@@ -123,12 +174,12 @@ export default function NewVehicleClient({
   const cameraInputRef = useRef<HTMLInputElement>(null);
   const galleryInputRef = useRef<HTMLInputElement>(null);
 
-  const [fuelType, setFuelType] = useState("");
-  const [engineCondition, setEngineCondition] = useState("");
+  const [fuelType, setFuelType] = useState(editVehicle?.fuel_type ?? "");
+  const [engineCondition, setEngineCondition] = useState(editVehicle?.engine_condition ?? "");
   const [insuranceDeadline, setInsuranceDeadline] = useState("");
   const [insuranceMonths, setInsuranceMonths] = useState<number | null>(null);
-  const [gearboxType, setGearboxType] = useState("");
-  const [gearboxCondition, setGearboxCondition] = useState("");
+  const [gearboxType, setGearboxType] = useState(editVehicle?.transmission ?? "");
+  const [gearboxCondition, setGearboxCondition] = useState(editVehicle?.gearbox_condition ?? "");
 
   const [pickerOpen, setPickerOpen] = useState<
     | "vehicle"
@@ -166,7 +217,7 @@ export default function NewVehicleClient({
   const [saving, setSaving] = useState(false);
   const [error, setError] = useState("");
 
-  // ثبت خودرو — جریان سه‌مرحله‌ای
+  // {isEditMode ? "ویرایش خودرو" : "ثبت خودرو"} — جریان سه‌مرحله‌ای
   const [currentStep, setCurrentStep] = useState(1);
 
   function clearVehicleForm() {
@@ -611,7 +662,163 @@ export default function NewVehicleClient({
   }
 
 
-  async function createVehicle(e: React.FormEvent) {
+  async function submitVehicle(e: React.FormEvent) {
+    e.preventDefault();
+
+    if (isEditMode && editMode?.vehicleId && editVehicle) {
+      const valid1 = validateStep(1);
+      const valid2 = validateStep(2);
+      const valid3 = validateStep(3);
+
+      if (!valid1 || !valid2 || !valid3) {
+        return;
+      }
+
+      setSaving(true);
+      setError("");
+
+      try {
+        const { updateEditableVehicleAction } = await import(
+          "@/app/vehicles/[id]/edit/editActions"
+        );
+
+        await updateEditableVehicleAction({
+          vehicleId: editMode.vehicleId,
+          brand,
+          model,
+          trim: trim.trim() || null,
+          modelYear: Number(modelYear),
+          mileage: Number(mileage),
+          color: color.trim() || null,
+          price: Number(price),
+          description: description.trim() || null,
+          status: editVehicle.status === "sold" ? "sold" : "available",
+          transmission: gearboxType || null,
+          fuelType: fuelType || null,
+          chassisCondition: JSON.stringify({
+            front: frontChassisCondition,
+            rear: rearChassisCondition,
+          }),
+          engineCondition: engineCondition || null,
+          insuranceExpiryDate: insuranceDeadline || null,
+          gearboxCondition: gearboxCondition || null,
+        });
+
+        const inspectionResult = await replaceVehicleBodyInspectionAction(
+          editMode.vehicleId,
+          bodyInspection.map((item) => ({
+            partCode: item.part_code,
+            condition: item.condition,
+            paintThicknessMicrons: item.paint_thickness_microns,
+            notes: item.notes,
+          })),
+        );
+
+        if (!inspectionResult.ok) {
+          throw new Error(
+            `ثبت اطلاعات کارشناسی بدنه ناموفق بود: ${inspectionResult.error}`
+          );
+        }
+
+        if (images.length > 0) {
+          const uploadedImagePaths: string[] = [];
+          const imageRows: Array<{
+            storagePath: string;
+            thumbnailPath: string;
+            sortOrder: number;
+          }> = [];
+
+          try {
+            for (let i = 0; i < images.length; i += 1) {
+              const sourceFile = images[i];
+              const processed = await processVehicleImage(sourceFile);
+
+              const basePath =
+                `${editMode.vehicleId}/${crypto.randomUUID()}`;
+
+              const storagePath = `${basePath}.webp`;
+              const thumbnailPath = `${basePath}-thumb.webp`;
+
+              const supabase = createClient();
+
+              const { error: uploadError } = await supabase.storage
+                .from("vehicle-images")
+                .upload(storagePath, processed.mainFile, {
+                  cacheControl: "31536000",
+                  upsert: false,
+                  contentType: "image/webp",
+                });
+
+              if (uploadError) {
+                throw new Error(
+                  `آپلود تصویر "${sourceFile.name}" ناموفق بود: ${uploadError.message}`
+                );
+              }
+
+              uploadedImagePaths.push(storagePath);
+
+              const { error: thumbnailUploadError } =
+                await supabase.storage
+                  .from("vehicle-images")
+                  .upload(thumbnailPath, processed.thumbnailFile, {
+                    cacheControl: "31536000",
+                    upsert: false,
+                    contentType: "image/webp",
+                  });
+
+              if (thumbnailUploadError) {
+                throw new Error(
+                  `آپلود thumbnail تصویر "${sourceFile.name}" ناموفق بود: ${thumbnailUploadError.message}`
+                );
+              }
+
+              uploadedImagePaths.push(thumbnailPath);
+
+              imageRows.push({
+                storagePath,
+                thumbnailPath,
+                sortOrder: editImages.length + i,
+              });
+            }
+
+            const imageRowsResult = await createVehicleImageRowsAction(
+              editMode.vehicleId,
+              imageRows,
+            );
+
+            if (!imageRowsResult.ok) {
+              throw new Error(
+                `ثبت اطلاعات تصاویر ناموفق بود: ${imageRowsResult.error}`
+              );
+            }
+          } catch (imageError) {
+            if (uploadedImagePaths.length > 0) {
+              await createClient()
+                .storage
+                .from("vehicle-images")
+                .remove(uploadedImagePaths);
+            }
+
+            throw imageError;
+          }
+        }
+
+        router.push(`/vehicles/${editMode.vehicleId}`);
+        return;
+      } catch (err) {
+        console.error(err);
+        setError(
+          err instanceof Error
+            ? err.message
+            : "ذخیره تغییرات با خطا مواجه شد."
+        );
+      } finally {
+        setSaving(false);
+      }
+
+      return;
+    }
+
     e.preventDefault();
 
     if (!dealershipId) {
@@ -878,7 +1085,7 @@ export default function NewVehicleClient({
             </button>
 
             <h1 className="text-[18px] font-extrabold text-gray-950">
-              ثبت خودرو
+              {isEditMode ? "ویرایش خودرو" : "ثبت خودرو"}
             </h1>
 
             <button
@@ -891,16 +1098,19 @@ export default function NewVehicleClient({
             </button>
           </div>
 
-          <div className="mt-2 flex w-full gap-1.5" aria-label="مراحل ثبت خودرو">
-      {[1, 2, 3].map((step) => (
-        <span
-          key={step}
-          className={`h-1.5 flex-1 rounded-full ${
-            currentStep >= step ? "bg-emerald-500" : "bg-gray-200"
-          }`}
-        />
-      ))}
-    </div>
+          <div
+            className="mt-2 -mx-4 flex h-2 w-[calc(100%+2rem)] gap-1.5 bg-gray-100 px-4"
+            aria-label={isEditMode ? "مراحل ویرایش خودرو" : "مراحل ثبت خودرو"}
+          >
+            {[1, 2, 3].map((step) => (
+              <span
+                key={step}
+                className={`h-2 flex-1 ${
+                  currentStep >= step ? "bg-emerald-500" : "bg-gray-200"
+                }`}
+              />
+            ))}
+          </div>
         </div>
       </header>
 
@@ -940,7 +1150,7 @@ export default function NewVehicleClient({
               return;
             }
 
-            createVehicle(e);
+            submitVehicle(e);
           }}
           className="space-y-6"
         >
@@ -2026,7 +2236,9 @@ export default function NewVehicleClient({
               ? "در حال ذخیره..."
               : currentStep < 3
                 ? "ادامه"
-                : "ثبت خودرو"}
+                : isEditMode
+                  ? "ذخیره تغییرات"
+                  : "ثبت خودرو"}
           </button>
         </form>
       </div>

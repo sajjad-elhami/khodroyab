@@ -96,3 +96,9 @@ review_*.txt
 /public/vehicle-inspection/click-test.html
 /public/vehicle-inspection/designs/
 /public/vehicle-inspection/svg-geometry-debug.svg
+
+# Local development backups
+*.backup-*.tsx
+*.backup-*.ts
+*.local-backup.tsx
+*.after-refactor

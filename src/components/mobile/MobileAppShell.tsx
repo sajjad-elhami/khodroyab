@@ -30,6 +30,7 @@ type VehicleHeaderProps = {
 type Props = {
   children: React.ReactNode;
   vehicleHeader?: VehicleHeaderProps;
+  hideHeader?: boolean;
 };
 
 const navItems = [
@@ -124,6 +125,7 @@ const faNumber = new Intl.NumberFormat("fa-IR");
 export default function MobileAppShell({
   children,
   vehicleHeader,
+  hideHeader = false,
 }: Props) {
   const pathname = usePathname();
   const isVehicleHeader = Boolean(vehicleHeader);
@@ -394,7 +396,8 @@ export default function MobileAppShell({
 
   return (
     <main dir="rtl" className="min-h-screen bg-[#f6f7f9] text-gray-950">
-      <header className="fixed inset-x-0 top-0 z-40 border-b border-gray-100 bg-white/95 shadow-sm backdrop-blur-xl">
+      {!hideHeader && (
+<header className="fixed inset-x-0 top-0 z-40 border-b border-gray-100 bg-white/95 shadow-sm backdrop-blur-xl">
         <div className="mx-auto w-full max-w-xl px-4 pb-3 pt-3">
           <div className="flex items-center gap-2">
             <button
@@ -429,6 +432,7 @@ export default function MobileAppShell({
           </div>
         </div>
       </header>
+)}
 
       <div className="mx-auto w-full max-w-xl px-4 pb-28 pt-[82px]">
         {children}
