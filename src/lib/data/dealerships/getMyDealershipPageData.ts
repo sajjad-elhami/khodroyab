@@ -1,6 +1,6 @@
 import type { SupabaseClient } from "@supabase/supabase-js";
 
-export type MyDealershipVehicle = {
+type RpcVehicle = {
   id: string;
   dealership_id: string;
   created_by: string | null;
@@ -19,6 +19,9 @@ export type MyDealershipVehicle = {
   inventory_confirmed_at: string | null;
   dealership_name: string | null;
   image_path: string | null;
+};
+
+export type MyDealershipVehicle = RpcVehicle & {
   image_url: string | null;
 };
 
@@ -31,12 +34,11 @@ export type MyDealershipPageData = {
   vehicles: MyDealershipVehicle[];
 };
 
-type RpcVehicle = Omit<MyDealershipVehicle, "image_url">;
-
 type RpcPayload = {
   role?: string | null;
   dealership_id?: string | null;
   dealership_name?: string | null;
+  dealership_is_active?: boolean | null;
   total_count?: number | string;
   vehicles?: RpcVehicle[];
 };
@@ -62,24 +64,6 @@ export async function getMyDealershipPageData(
     ? payload.vehicles
     : [];
 
-  let dealershipIsActive: boolean | null = null;
-
-  if (payload.dealership_id) {
-    const { data: dealership, error: dealershipError } = await supabase
-      .from("dealerships")
-      .select("is_active")
-      .eq("id", payload.dealership_id)
-      .maybeSingle();
-
-    if (dealershipError) {
-      throw new Error(
-        `Failed to load dealership status: ${dealershipError.message}`,
-      );
-    }
-
-    dealershipIsActive = dealership?.is_active ?? null;
-  }
-
   const vehicles = rawVehicles.map((vehicle) => {
     let imageUrl: string | null = null;
 
@@ -101,7 +85,7 @@ export async function getMyDealershipPageData(
     role: payload.role ?? null,
     dealershipId: payload.dealership_id ?? null,
     dealershipName: payload.dealership_name ?? null,
-    dealershipIsActive,
+    dealershipIsActive: payload.dealership_is_active ?? null,
     totalCount: Number(payload.total_count ?? 0),
     vehicles,
   };
