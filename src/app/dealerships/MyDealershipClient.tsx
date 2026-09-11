@@ -326,3 +326,5 @@ export default function MyDealershipClient({
     </MobileAppShell>
   );
 }
+
+// Deployment trigger: no UI change.
