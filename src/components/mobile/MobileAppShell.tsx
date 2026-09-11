@@ -434,7 +434,7 @@ export default function MobileAppShell({
       </header>
 )}
 
-      <div className="mx-auto w-full max-w-xl px-4 pb-28 pt-[82px]">
+      <div className={`mx-auto w-full max-w-xl px-4 pb-28 ${hideHeader ? "pt-0" : "pt-[82px]"}`}>
         {children}
       </div>
 
