@@ -16,6 +16,7 @@ export type MyDealershipVehicle = {
   status: string;
   created_at: string;
   updated_at: string;
+  inventory_confirmed_at: string | null;
   dealership_name: string | null;
   image_path: string | null;
   image_url: string | null;
