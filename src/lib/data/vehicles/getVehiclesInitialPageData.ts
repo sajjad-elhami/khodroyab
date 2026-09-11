@@ -20,6 +20,11 @@ type InitialRpcPayload = {
   dealerships?: VehiclesPageData["dealerships"];
   favorite_vehicle_ids?: string[];
   all_listings_count?: number;
+  inventory_gate?: {
+    requires_update?: boolean;
+    total_available?: number | string;
+    confirmed_today?: number | string;
+  };
 };
 
 export type VehiclesInitialPageData = {
@@ -30,6 +35,11 @@ export type VehiclesInitialPageData = {
   dealerships: VehiclesPageData["dealerships"];
   favoriteVehicleIds: string[];
   allListingsCount: number;
+  inventoryGate: {
+    requiresUpdate: boolean;
+    totalAvailable: number;
+    confirmedToday: number;
+  };
 };
 
 export const getVehiclesInitialPageData = cache(
@@ -190,6 +200,8 @@ export const getVehiclesInitialPageData = cache(
       throw new Error("User is not authenticated.");
     }
 
+    const inventoryGate = payload.inventory_gate ?? {};
+
     return {
       search: {
         vehicles: vehiclesWithImages,
@@ -206,6 +218,11 @@ export const getVehiclesInitialPageData = cache(
         typeof payload.all_listings_count === "number"
           ? payload.all_listings_count
           : 0,
+      inventoryGate: {
+        requiresUpdate: Boolean(inventoryGate.requires_update),
+        totalAvailable: Number(inventoryGate.total_available ?? 0),
+        confirmedToday: Number(inventoryGate.confirmed_today ?? 0),
+      },
     };
   },
 );
