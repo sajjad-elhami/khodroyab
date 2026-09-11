@@ -5,6 +5,33 @@ import { createClient } from "@/lib/supabase/server";
 import { createAdminClient } from "@/lib/supabase/admin";
 import { getMyDealershipPageData } from "@/lib/data/dealerships/getMyDealershipPageData";
 
+function getTehranBusinessDayCutoff() {
+  const now = new Date();
+  const formatter = new Intl.DateTimeFormat("en-US", {
+    timeZone: "Asia/Tehran",
+    year: "numeric",
+    month: "2-digit",
+    day: "2-digit",
+    hour: "2-digit",
+    minute: "2-digit",
+    hour12: false,
+  });
+  const parts = formatter.formatToParts(now);
+  const get = (type: string) => parts.find((part) => part.type === type)?.value;
+  const year = get("year");
+  const month = get("month");
+  const day = get("day");
+  const hour = Number(get("hour") ?? "0");
+  const minute = Number(get("minute") ?? "0");
+
+  if (!year || !month || !day) {
+    throw new Error("Unable to determine Tehran date.");
+  }
+
+  if (hour < 7 || (hour === 7 && minute < 0)) return null;
+  return new Date(`${year}-${month}-${day}T07:00:00+03:30`);
+}
+
 async function getCurrentUser() {
   const supabase = await createClient();
   const { data: claimsData } = await supabase.auth.getClaims();
@@ -23,23 +50,57 @@ export async function updateInventoryVehicleAction(vehicleId: string) {
       .eq("id", userId)
       .maybeSingle();
     if (profileError) throw profileError;
+
     const isAdmin = profile?.role === "admin";
     const dealershipId = profile?.dealership_id;
+
+    if (!isAdmin && !dealershipId) {
+      return { ok: false as const, error: "نمایشگاه کاربر مشخص نیست." };
+    }
+
+    const confirmedAt = new Date().toISOString();
     let query = supabase
       .from("vehicles")
-      .update({ inventory_confirmed_at: new Date().toISOString() })
+      .update({ inventory_confirmed_at: confirmedAt })
       .eq("id", vehicleId);
+
     if (!isAdmin) {
-      if (!dealershipId) {
-        return { ok: false as const, error: "نمایشگاه کاربر مشخص نیست." };
-      }
-      query = query.eq("dealership_id", dealershipId);
+      query = query.eq("dealership_id", dealershipId as string);
     }
+
     const { error } = await query;
     if (error) throw error;
+
+    let allConfirmedToday = true;
+
+    if (!isAdmin) {
+      const { data: vehicles, error: vehiclesError } = await supabase
+        .from("vehicles")
+        .select("inventory_confirmed_at")
+        .eq("dealership_id", dealershipId as string)
+        .eq("status", "available");
+
+      if (vehiclesError) throw vehiclesError;
+
+      const cutoff = getTehranBusinessDayCutoff();
+      if (cutoff) {
+        const cutoffMs = cutoff.getTime();
+        allConfirmedToday = (vehicles ?? []).every(
+          (vehicle) =>
+            Boolean(vehicle.inventory_confirmed_at) &&
+            new Date(vehicle.inventory_confirmed_at).getTime() >= cutoffMs,
+        );
+      }
+    }
+
     revalidatePath("/dealerships");
     revalidatePath("/vehicles");
-    return { ok: true as const };
+
+    return {
+      ok: true as const,
+      inventoryConfirmedAt: confirmedAt,
+      allConfirmedToday,
+    };
   } catch (error) {
     return {
       ok: false as const,
@@ -55,9 +116,6 @@ export async function deleteInventoryVehicleAction(vehicleId: string) {
   try {
     const { supabase } = await getCurrentUser();
 
-    // First read every stored image path. Storage files are removed through
-    // Supabase Storage API with the server-only admin key; SQL is not allowed
-    // to delete rows from storage.objects.
     const { data: images, error: imagesError } = await supabase
       .from("vehicle_images")
       .select("storage_path, thumbnail_path")
@@ -80,14 +138,11 @@ export async function deleteInventoryVehicleAction(vehicleId: string) {
       if (storageError) throw storageError;
     }
 
-    // DB records are deleted only after Storage API cleanup succeeds.
     const { error } = await supabase.rpc("delete_vehicle_completely", {
       p_vehicle_id: vehicleId,
     });
     if (error) throw error;
 
-    // Invalidate every inventory surface so a successful deletion is visible
-    // immediately, even when a server-rendered route was previously cached.
     revalidatePath("/dealerships");
     revalidatePath("/vehicles");
     revalidatePath(`/vehicles/${vehicleId}`);
