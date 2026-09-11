@@ -2,10 +2,9 @@
 
 import { useState } from "react";
 import { createClient } from "@/lib/supabase/client";
-import { useRouter, useSearchParams } from "next/navigation";
+import { useSearchParams } from "next/navigation";
 
 export default function LoginForm() {
-  const router = useRouter();
   const searchParams = useSearchParams();
 
   const [email, setEmail] = useState("");
@@ -22,32 +21,42 @@ export default function LoginForm() {
     setLoading(true);
     setMessage("");
 
-    const supabase = createClient();
+    try {
+      const supabase = createClient();
 
-    const { data, error } = await supabase.auth.signInWithPassword({
-      email: email.trim(),
-      password,
-    });
+      const { data, error } = await supabase.auth.signInWithPassword({
+        email: email.trim(),
+        password,
+      });
 
-    if (error || !data.session) {
-      setMessage(error?.message || "ایمیل یا رمز عبور صحیح نیست.");
+      if (error) {
+        setMessage(error.message || "ایمیل یا رمز عبور صحیح نیست.");
+        setLoading(false);
+        return;
+      }
+
+      if (!data.session) {
+        setMessage("ورود انجام نشد. لطفاً دوباره تلاش کنید.");
+        setLoading(false);
+        return;
+      }
+
+      const redirectTo = searchParams.get("redirect");
+      const safeRedirect =
+        redirectTo &&
+        redirectTo.startsWith("/") &&
+        !redirectTo.startsWith("//")
+          ? redirectTo
+          : "/vehicles";
+
+      // Force a full browser navigation so the newly persisted Supabase
+      // auth cookies are sent on the next request and the proxy can see them.
+      window.location.assign(safeRedirect);
+    } catch (error) {
+      console.error("[LOGIN_ERROR]", error);
+      setMessage("خطایی هنگام ورود رخ داد. اتصال اینترنت و اطلاعات ورود را بررسی کنید.");
       setLoading(false);
-      return;
     }
-
-    await supabase.auth.getSession();
-
-    const redirectTo = searchParams.get("redirect");
-
-    const safeRedirect =
-      redirectTo &&
-      redirectTo.startsWith("/") &&
-      !redirectTo.startsWith("//")
-        ? redirectTo
-        : "/vehicles";
-
-    router.replace(safeRedirect);
-    router.refresh();
   };
 
   return (
