@@ -3,8 +3,12 @@ import { createClient } from "@/lib/supabase/server";
 
 export async function GET() {
   const supabase = await createClient();
-  const start = performance.now();
 
+  const claimsStart = performance.now();
+  const { data: claimsData, error: claimsError } = await supabase.auth.getClaims();
+  const claimsMs = performance.now() - claimsStart;
+
+  const rpcStart = performance.now();
   const { data, error } = await supabase.rpc("get_vehicles_initial_page_data", {
     p_search: null,
     p_brand: null,
@@ -29,13 +33,15 @@ export async function GET() {
     p_fuel_type: null,
     p_transmission: null,
   });
-
-  const totalMs = performance.now() - start;
+  const rpcMs = performance.now() - rpcStart;
 
   return NextResponse.json({
-    ok: !error,
-    rpcMs: Number(totalMs.toFixed(1)),
+    ok: !error && !claimsError,
+    claimsMs: Number(claimsMs.toFixed(1)),
+    authenticated: Boolean(claimsData?.claims?.sub),
+    claimsError: claimsError?.message ?? null,
+    rpcMs: Number(rpcMs.toFixed(1)),
     payloadBytes: data ? JSON.stringify(data).length : 0,
-    error: error?.message ?? null,
+    rpcError: error?.message ?? null,
   });
 }
