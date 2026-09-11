@@ -43,14 +43,14 @@ export default function MyDealershipClient({ initialData }: { initialData: MyDea
   async function loadMore() { if (loadingMore || !hasMore) return; setLoadingMore(true); const result = await loadMyDealershipInventoryAction(vehicles.length, PAGE_SIZE); if (!result.ok) { setError(result.error); setLoadingMore(false); return; } setVehicles(current => [...current, ...result.data.vehicles]); setTotalCount(result.data.totalCount); setLoadingMore(false); }
   function handleDeleted(vehicleId: string) { setVehicles(current => current.filter(v => v.id !== vehicleId)); setTotalCount(current => Math.max(0, current - 1)); }
   return <MobileAppShell><div dir="rtl" className="mx-auto w-full max-w-xl px-4 pb-32 pt-[96px]">
-    <div className="mb-5 flex items-center justify-between gap-3">
-      <div className="min-w-0">
-        <h1 className="truncate text-[20px] font-black tracking-tight text-gray-950">{title}</h1>
-        <div className={`mt-0.5 text-[11px] font-bold ${isActive ? "text-emerald-600" : "text-red-600"}`}>
-          <span className="mr-1 inline-block text-[9px]">●</span>{isActive ? "فعال" : "غیرفعال"}
+    <div className="mb-5 rounded-2xl border border-gray-200 bg-white px-4 py-3.5 shadow-sm">
+      <div className="flex items-center justify-between gap-4">
+        <h1 className="min-w-0 truncate text-[17px] font-black tracking-tight text-gray-950">{title}</h1>
+        <div className={`flex shrink-0 items-center gap-1.5 text-[12px] font-extrabold ${isActive ? "text-emerald-600" : "text-red-600"}`}>
+          <span className={`inline-block h-2 w-2 rounded-full ${isActive ? "bg-emerald-500" : "bg-red-500"}`} aria-hidden="true" />
+          <span>{isActive ? "فعال" : "غیرفعال"}</span>
         </div>
       </div>
-      <span className="shrink-0 text-[11px] font-bold text-gray-400">{totalCount.toLocaleString("fa-IR")} خودرو</span>
     </div>
 
     <Link href="/vehicles/new" className="mb-6 flex h-12 w-full items-center justify-center gap-2 rounded-2xl border border-emerald-100 bg-emerald-50 text-[14px] font-extrabold text-emerald-700 transition active:scale-[0.99]">
