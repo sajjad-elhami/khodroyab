@@ -4,12 +4,10 @@
 import { normalizeDigits } from "@/lib/utils/numberInput";
 import { useEffect, useMemo, useRef, useState } from "react";
 import Link from "next/link";
-import { createClient } from "@/lib/supabase/client";
 import { useRouter } from "next/navigation";
 import type { VehiclesInitialPageData } from "@/lib/data/vehicles/getVehiclesInitialPageData";
 import type { VehiclesSearchPageData } from "@/lib/data/vehicles/getVehiclesSearchPageData";
 import { searchVehiclesAction } from "./actions";
-import { toggleVehicleFavoriteAction } from "./mutations";
 import MobileAppShell from "@/components/mobile/MobileAppShell";
 import VehicleBrandModelPicker from "@/components/vehicles/VehicleBrandModelPicker";
 import {
@@ -133,8 +131,6 @@ export default function VehiclesClient({
 }) {
   const router = useRouter();
 
-  const supabase = useMemo(() => createClient(), []);
-
   const loadMoreRef = useRef<HTMLDivElement | null>(null);
   const lastFilterKeyRef = useRef<string | null>(null);
   const skipInitialFilterLoadRef = useRef(true);
@@ -155,13 +151,6 @@ export default function VehiclesClient({
     initialData.dealerships as Dealership[],
   );
 
-
-  const [userId, setUserId] = useState<string | null>(
-    initialData.userId,
-  );
-  const [favoriteIds, setFavoriteIds] = useState<Set<string>>(
-    () => new Set(initialData.favoriteVehicleIds),
-  );
 
   const [search, setSearch] = useState("");
   const [brand, setBrand] = useState("");
@@ -1109,43 +1098,6 @@ export default function VehiclesClient({
 
       setLoading(false);
       setLoadingMore(false);
-    }
-  }
-
-  async function toggleFavorite(
-    vehicleId: string
-  ) {
-    if (!userId) return;
-
-    const wasFavorite =
-      favoriteIds.has(vehicleId);
-
-    setFavoriteIds((current) => {
-      const next = new Set(current);
-
-      if (wasFavorite) {
-        next.delete(vehicleId);
-      } else {
-        next.add(vehicleId);
-      }
-
-      return next;
-    });
-
-    const result = await toggleVehicleFavoriteAction(vehicleId);
-
-    if (!result.ok) {
-      setFavoriteIds((current) => {
-        const next = new Set(current);
-
-        if (wasFavorite) {
-          next.add(vehicleId);
-        } else {
-          next.delete(vehicleId);
-        }
-
-        return next;
-      });
     }
   }
 
