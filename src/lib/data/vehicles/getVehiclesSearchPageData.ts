@@ -1,5 +1,5 @@
-import type { SupabaseClient } from "@supabase/supabase-js";
 import { cache } from "react";
+import pool from "@/lib/db";
 import type { SearchVehiclesParams } from "./searchVehicles";
 
 export type VehicleSearchImage = {
@@ -20,13 +20,6 @@ type VehicleInspectionRow = {
   vehicle_id: string;
   part_code: string;
   condition: string;
-};
-
-type VehiclesSearchRpcPayload = {
-  vehicles?: Record<string, unknown>[];
-  images?: VehicleSearchImage[];
-  inspections?: VehicleInspectionRow[];
-  total_count?: number | string;
 };
 
 export type VehiclesSearchPageData = {
@@ -65,96 +58,100 @@ const STRUCTURE_CODES = new Set([
   "roof_structure",
 ]);
 
+function getVehicleImageUrl(path: string | null) {
+  if (!path) return null;
+
+  const configuredBase =
+    process.env.VEHICLE_IMAGE_BASE_URL ||
+    (process.env.NEXT_PUBLIC_SUPABASE_URL
+      ? `${process.env.NEXT_PUBLIC_SUPABASE_URL.replace(/\/$/, "")}/storage/v1/object/public/vehicle-images`
+      : "");
+
+  if (!configuredBase) return null;
+
+  return `${configuredBase.replace(/\/$/, "")}/${path
+    .split("/")
+    .map(encodeURIComponent)
+    .join("/")}`;
+}
+
 export const getVehiclesSearchPageData = cache(
-  async (supabase: SupabaseClient, 
+  async (
     params: SearchVehiclesParams,
   ): Promise<VehiclesSearchPageData> => {
+    const start = performance.now();
 
-    const rpcStart = performance.now();
+    const values = [
+      params.search || null,
+      params.brand || null,
+      params.model || null,
+      params.yearFrom ?? null,
+      params.yearTo ?? null,
+      params.priceFrom ?? null,
+      params.priceTo ?? null,
+      params.mileageFrom ?? null,
+      params.mileageTo ?? null,
+      params.color || null,
+      params.status || null,
+      params.provinceId || null,
+      params.cityIds ?? [],
+      params.dealershipId || null,
+      params.sort ?? "newest",
+      params.limit,
+      params.offset,
+      params.chassisCondition || null,
+      params.bodyCondition || null,
+      params.origin || null,
+      params.fuelType || null,
+      params.transmission || null,
+    ];
 
-    const { data, error } = await supabase.rpc(
-      "get_vehicles_search_page_data",
-      {
-        p_search: params.search || null,
-        p_brand: params.brand || null,
-        p_model: params.model || null,
-
-        p_year_from: params.yearFrom ?? null,
-        p_year_to: params.yearTo ?? null,
-
-        p_price_from: params.priceFrom ?? null,
-        p_price_to: params.priceTo ?? null,
-
-        p_mileage_from: params.mileageFrom ?? null,
-        p_mileage_to: params.mileageTo ?? null,
-
-        p_color: params.color || null,
-        p_status: params.status || null,
-
-        p_province_id: params.provinceId || null,
-        p_city_ids: params.cityIds ?? [],
-        p_dealership_id: params.dealershipId || null,
-
-        p_sort: params.sort ?? "newest",
-        p_limit: params.limit,
-        p_offset: params.offset,
-
-        p_chassis_condition:
-          params.chassisCondition || null,
-        p_body_condition:
-          params.bodyCondition || null,
-        p_origin:
-          params.origin || null,
-        p_fuel_type:
-          params.fuelType || null,
-        p_transmission:
-          params.transmission || null,
-      },
+    const { rows: vehicles } = await pool.query(
+      `SELECT * FROM public.search_vehicles_multi(
+        $1,$2,$3,$4,$5,$6,$7,$8,$9,$10,$11,
+        $12,$13,$14,$15,$16,$17,$18,$19,$20,$21
+      )`,
+      values,
     );
 
-    const rpcMs = performance.now() - rpcStart;
+    const vehicleIds = vehicles.map((vehicle) => String(vehicle.id));
 
-    console.log(
-      `[DATA_TIMING] getVehiclesSearchPageData rpc=${rpcMs.toFixed(1)}ms`,
-    );
+    let images: VehicleSearchImage[] = [];
+    let inspections: VehicleInspectionRow[] = [];
 
-    if (error) {
-      throw new Error(
-        `Failed to load vehicle search data: ${error.message}`,
-      );
+    if (vehicleIds.length > 0) {
+      const [imageResult, inspectionResult] = await Promise.all([
+        pool.query(
+          `SELECT vehicle_id, storage_path, thumbnail_path, sort_order
+           FROM public.vehicle_images
+           WHERE vehicle_id = ANY($1::uuid[])
+           ORDER BY vehicle_id, sort_order`,
+          [vehicleIds],
+        ),
+        pool.query(
+          `SELECT vehicle_id, part_code, condition
+           FROM public.vehicle_body_inspections
+           WHERE vehicle_id = ANY($1::uuid[])
+           ORDER BY vehicle_id, part_code`,
+          [vehicleIds],
+        ),
+      ]);
+
+      images = imageResult.rows as VehicleSearchImage[];
+      inspections = inspectionResult.rows as VehicleInspectionRow[];
     }
-
-    const payload =
-      (data ?? {}) as VehiclesSearchRpcPayload;
-
-    const vehicles = Array.isArray(payload.vehicles)
-      ? payload.vehicles
-      : [];
-
-    const images = Array.isArray(payload.images)
-      ? payload.images
-      : [];
-
-    const inspections = Array.isArray(payload.inspections)
-      ? payload.inspections
-      : [];
-
-    const processingStart = performance.now();
 
     const firstImageByVehicle = new Map<string, string>();
 
     for (const image of images) {
       if (!firstImageByVehicle.has(image.vehicle_id)) {
-        const { data: publicUrlData } = supabase.storage
-          .from("vehicle-images")
-          .getPublicUrl(
-            image.thumbnail_path || image.storage_path,
-          );
-
-        firstImageByVehicle.set(
-          image.vehicle_id,
-          publicUrlData.publicUrl,
+        const imageUrl = getVehicleImageUrl(
+          image.thumbnail_path || image.storage_path,
         );
+
+        if (imageUrl) {
+          firstImageByVehicle.set(image.vehicle_id, imageUrl);
+        }
       }
     }
 
@@ -175,19 +172,12 @@ export const getVehiclesSearchPageData = cache(
     }
 
     for (const inspection of inspections) {
-      if (inspection.condition === "intact") {
-        continue;
-      }
+      if (inspection.condition === "intact") continue;
 
-      const summary =
-        inspectionSummaries[inspection.vehicle_id];
-
-      if (!summary) {
-        continue;
-      }
+      const summary = inspectionSummaries[inspection.vehicle_id];
+      if (!summary) continue;
 
       summary.affectedCount += 1;
-
       summary.conditionCounts[inspection.condition] =
         (summary.conditionCounts[inspection.condition] || 0) + 1;
 
@@ -206,17 +196,18 @@ export const getVehiclesSearchPageData = cache(
         firstImageByVehicle.get(String(vehicle.id)) ?? null,
     }));
 
-    const processingMs = performance.now() - processingStart;
+    const totalCount = Number(vehicles[0]?.total_count ?? 0);
+    const totalMs = performance.now() - start;
 
     console.log(
-      `[DATA_TIMING] getVehiclesSearchPageData processing=${processingMs.toFixed(1)}ms vehicles=${vehicles.length} images=${images.length} inspections=${inspections.length}`,
+      `[DATA_TIMING] getVehiclesSearchPageData direct-db=${totalMs.toFixed(1)}ms vehicles=${vehicles.length} images=${images.length} inspections=${inspections.length}`,
     );
 
     return {
       vehicles: vehiclesWithImages,
       images,
       inspectionSummaries,
-      totalCount: Number(payload.total_count ?? 0),
+      totalCount,
     };
   },
 );
