@@ -8,7 +8,7 @@ export async function updateSession(request: NextRequest) {
   // /vehicles now reads directly from Arvan PostgreSQL and does not need
   // Supabase Auth. Authentication for the rest of the app remains unchanged
   // until the dedicated Arvan Auth migration stage.
-  if (pathname === "/vehicles" || pathname.startsWith("/vehicles/")) {
+  if (pathname === "/vehicles") {
     return NextResponse.next();
   }
 
