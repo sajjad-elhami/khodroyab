@@ -2,6 +2,16 @@ import { createServerClient } from "@supabase/ssr";
 import { NextResponse, type NextRequest } from "next/server";
 
 export async function updateSession(request: NextRequest) {
+  const pathname = request.nextUrl.pathname;
+
+  // Temporary migration exception:
+  // /vehicles now reads directly from Arvan PostgreSQL and does not need
+  // Supabase Auth. Authentication for the rest of the app remains unchanged
+  // until the dedicated Arvan Auth migration stage.
+  if (pathname === "/vehicles" || pathname.startsWith("/vehicles/")) {
+    return NextResponse.next();
+  }
+
   let supabaseResponse = NextResponse.next({
     request,
   });
@@ -28,7 +38,7 @@ export async function updateSession(request: NextRequest) {
           });
         },
       },
-    }
+    },
   );
 
   const claimsStart = performance.now();
@@ -36,13 +46,11 @@ export async function updateSession(request: NextRequest) {
   const claimsMs = performance.now() - claimsStart;
 
   console.log(
-    `[PROXY_TIMING] ${request.method} ${request.nextUrl.pathname} getClaims=${claimsMs.toFixed(1)}ms`
+    `[PROXY_TIMING] ${request.method} ${pathname} getClaims=${claimsMs.toFixed(1)}ms`,
   );
 
   const userId = claimsData?.claims?.sub;
   const isAuthenticated = Boolean(userId);
-
-  const pathname = request.nextUrl.pathname;
 
   const isPublicRoute =
     pathname === "/" ||
