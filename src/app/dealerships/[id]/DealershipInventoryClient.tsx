@@ -128,7 +128,7 @@ export default function DealershipInventoryClient({
     setError("");
 
     const { data, error: searchError } =
-      await supabase.rpc("search_vehicles", {
+      await supabase.rpc("search_vehicles_multi", {
         p_search: normalizePersian(search) || null,
         p_brand: null,
         p_model: null,
@@ -141,7 +141,7 @@ export default function DealershipInventoryClient({
         p_color: null,
         p_status: null,
         p_province_id: null,
-        p_city_id: null,
+        p_city_ids: [],
         p_dealership_id: dealership.id,
         p_sort: sort,
         p_limit: PAGE_SIZE,
